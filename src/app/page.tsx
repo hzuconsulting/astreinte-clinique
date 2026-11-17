@@ -31,10 +31,19 @@ export default function Home() {
     <div className="min-h-screen pb-24 sm:pb-8">
       <header className="no-print sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center px-4 py-3">
-          <span className="flex items-center gap-2 font-bold text-ink">
+          <button
+            onClick={() => {
+              setTab('planning');
+              const now = todayISO();
+              setCursor({ year: Number(now.slice(0, 4)), month: Number(now.slice(5, 7)) });
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="-m-1 flex items-center gap-2 rounded-xl p-1 font-bold text-ink transition hover:bg-paper active:scale-95"
+            aria-label="Retour au planning du mois en cours"
+          >
             <Logo size={32} />
             Astreintes
-          </span>
+          </button>
           <SyncPill sync={sync} onClick={() => setTab('partage')} />
           <nav className="hidden gap-1 sm:flex sm:flex-1 sm:justify-end">
             {TABS.map((x) => (
