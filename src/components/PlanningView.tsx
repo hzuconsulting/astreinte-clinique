@@ -23,6 +23,7 @@ export function PlanningView({ state, update, cursor, setCursor }: Props) {
   const today = todayISO();
   const [day, setDay] = useState<ISODate | null>(null);
   const [genOpen, setGenOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
   const [report, setReport] = useState<{ planned: number; warnings: Warning[] } | null>(null);
 
   const days = eachDay(from, to);
@@ -110,8 +111,29 @@ export function PlanningView({ state, update, cursor, setCursor }: Props) {
           <Button variant="ghost" onClick={() => setCursor({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) })}>
             Aujourd’hui
           </Button>
+          {days.some((d) => state.assignments[d]) && (
+            <Button variant="danger" className="col-span-2" onClick={() => setClearOpen(true)}>
+              Vider le mois
+            </Button>
+          )}
         </div>
       </Card>
+
+      <ClearMonthSheet
+        open={clearOpen}
+        onClose={() => setClearOpen(false)}
+        state={state}
+        days={days}
+        label={`${MONTH_LABEL[month - 1]} ${year}`}
+        onClear={(keepLocked) => {
+          update((s) => {
+            const assignments = { ...s.assignments };
+            for (const d of days) if (!(keepLocked && assignments[d]?.locked)) delete assignments[d];
+            return { ...s, assignments };
+          });
+          setClearOpen(false);
+        }}
+      />
 
       <PrintList state={state} days={days} holidays={holidays} title={`${MONTH_LABEL[month - 1]} ${year}`} />
 
@@ -392,6 +414,41 @@ function DaySheet({
         <p className="text-xs text-muted">
           Un choix manuel est verrouillé : l’assistant ne le modifiera plus lors des prochaines générations.
         </p>
+      </div>
+    </Sheet>
+  );
+}
+
+function ClearMonthSheet({
+  open, onClose, state, days, label, onClear,
+}: {
+  open: boolean;
+  onClose: () => void;
+  state: PlanState;
+  days: ISODate[];
+  label: string;
+  onClear: (keepLocked: boolean) => void;
+}) {
+  const filled = days.filter((d) => state.assignments[d]);
+  const locked = filled.filter((d) => state.assignments[d]!.locked).length;
+  const auto = filled.length - locked;
+  return (
+    <Sheet open={open} onClose={onClose} title={<span>Vider <span className="capitalize">{label}</span></span>}>
+      <div className="space-y-3 text-sm">
+        <p className="text-muted">
+          {filled.length} jour{filled.length > 1 ? 's' : ''} attribué{filled.length > 1 ? 's' : ''} ce mois-ci, dont {locked} choix manuel{locked > 1 ? 's' : ''} 🔒.
+          Le changement est visible par tout le monde.
+        </p>
+        {locked > 0 && auto > 0 && (
+          <Button variant="soft" className="w-full" onClick={() => onClear(true)}>
+            Garder les 🔒, retirer les {auto} autres
+          </Button>
+        )}
+        <Button variant="danger" className="w-full" onClick={() => onClear(false)}>
+          Tout vider ({filled.length} jour{filled.length > 1 ? 's' : ''})
+        </Button>
+        <Button variant="ghost" className="w-full" onClick={onClose}>Annuler</Button>
+        <p className="text-xs text-muted">Les absences et les réglages ne sont pas touchés. Seuls les jours du mois affiché sont vidés.</p>
       </div>
     </Sheet>
   );
