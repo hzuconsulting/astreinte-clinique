@@ -35,34 +35,3 @@ export function saveLocal(state: PlanState): void {
     /* stockage plein ou interdit : l'appli reste utilisable en mémoire */
   }
 }
-
-function toB64Url(bytes: Uint8Array): string {
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function fromB64Url(s: string): Uint8Array {
-  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
-
-async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
-  const out = new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(stream));
-  return new Uint8Array(await out.arrayBuffer());
-}
-
-/** Tout le planning, compressé, tient dans le fragment `#p=…` d'une URL. */
-export async function encodeShare(state: PlanState): Promise<string> {
-  const json = new TextEncoder().encode(JSON.stringify(state));
-  return toB64Url(await pipe(json, new CompressionStream('deflate-raw')));
-}
-
-export async function decodeShare(code: string): Promise<PlanState | null> {
-  try {
-    const bytes = await pipe(fromB64Url(code), new DecompressionStream('deflate-raw'));
-    return parseState(JSON.parse(new TextDecoder().decode(bytes)));
-  } catch {
-    return null;
-  }
-}

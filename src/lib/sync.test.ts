@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultState, type PlanState } from './model';
-import { decodeInvite, encodeInvite, merge3 } from './sync';
+import { merge3 } from './sync';
 
 function base(): PlanState {
   const s = defaultState();
@@ -51,8 +51,4 @@ describe('fusion des modifications simultanées', () => {
     expect(merge3(b, mine, theirs).assignments['2027-01-01']!.doctorId).toBe('d1');
   });
 
-  it('encode et décode le lien d’invitation', () => {
-    const c = { url: 'https://abc.supabase.co', key: 'sb_publishable_xyz', code: 'AbC-123_xyzxyzxyzxyz' };
-    expect(decodeInvite(encodeInvite(c))).toEqual(c);
-  });
 });

@@ -4,7 +4,6 @@ import { easterSunday, frenchHolidays } from './holidays';
 import { defaultState, type PlanState } from './model';
 import { generate, suggest } from './scheduler';
 import { yearStats } from './stats';
-import { decodeShare, encodeShare } from './storage';
 import { buildIcs } from './ics';
 
 function team(): PlanState {
@@ -135,15 +134,7 @@ describe('générateur', () => {
   });
 });
 
-describe('partage', () => {
-  it('encode et décode un planning complet', async () => {
-    const s = team();
-    s.assignments = generate(s, { from: '2027-01-01', to: '2027-12-31', seed: 1, restarts: 1 }).assignments;
-    const code = await encodeShare(s);
-    expect(code.length).toBeLessThan(12_000);
-    expect(await decodeShare(code)).toEqual(s);
-  });
-
+describe('agenda', () => {
   it('exporte un agenda .ics avec un événement par bloc', () => {
     const s = team();
     s.assignments = { '2027-01-02': { doctorId: 'd0', locked: false }, '2027-01-03': { doctorId: 'd0', locked: false } };

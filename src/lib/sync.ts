@@ -9,66 +9,32 @@
 import type { PlanState } from './model';
 import { parseState } from './storage';
 
+/**
+ * Connexion à la base partagée. La clé « publishable » est faite pour être
+ * publique (elle est de toute façon lisible dans le site) ; les variables
+ * d'environnement permettent de pointer une autre base sans toucher au code.
+ */
 export interface SyncConfig {
   url: string;
   key: string;
+  /** Identifiant de l'unique planning dans la table. */
   code: string;
 }
+
+export const SYNC: SyncConfig = {
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://rlyuswzqxgcmluhrnpyi.supabase.co',
+  key: process.env.NEXT_PUBLIC_SUPABASE_KEY || 'sb_publishable_IX6xvz-yQdzWHZxeBwxr3A_WoSb2iTH',
+  code: process.env.NEXT_PUBLIC_PLANNING_ID || 'astreinte-clinique-planning',
+};
 
 export interface Remote {
   state: PlanState;
   version: number;
 }
 
-const CONFIG_KEY = 'astreinte-clinique:sync';
-
-export function loadSyncConfig(): SyncConfig | null {
-  try {
-    const c = JSON.parse(localStorage.getItem(CONFIG_KEY) ?? 'null') as SyncConfig | null;
-    return c && c.url && c.key && c.code ? c : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveSyncConfig(c: SyncConfig | null): void {
-  try {
-    if (c) localStorage.setItem(CONFIG_KEY, JSON.stringify(c));
-    else localStorage.removeItem(CONFIG_KEY);
-  } catch {
-    /* ignoré */
-  }
-}
-
-export function newTeamCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(18));
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-export function normalizeUrl(url: string): string {
+function normalizeUrl(url: string): string {
   const u = url.trim().replace(/\/+$/, '');
   return /^https?:\/\//.test(u) ? u : `https://${u}`;
-}
-
-/** Le lien d'invitation embarque la connexion : les collègues n'ont rien à saisir. */
-export function encodeInvite(c: SyncConfig): string {
-  return btoa(unescape(encodeURIComponent(JSON.stringify({ u: c.url, k: c.key, c: c.code }))))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
-export function decodeInvite(s: string): SyncConfig | null {
-  try {
-    const o = JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))))) as {
-      u?: string;
-      k?: string;
-      c?: string;
-    };
-    return o.u && o.k && o.c ? { url: o.u, key: o.k, code: o.c } : null;
-  } catch {
-    return null;
-  }
 }
 
 export class SyncError extends Error {}

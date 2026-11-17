@@ -6,7 +6,6 @@ import { PlanningView } from '@/components/PlanningView';
 import { ShareView } from '@/components/ShareView';
 import { StatsView } from '@/components/StatsView';
 import { TeamView } from '@/components/TeamView';
-import { Button } from '@/components/ui';
 import { usePlan, type SyncStatus } from '@/components/usePlan';
 
 const TABS = [
@@ -14,12 +13,12 @@ const TABS = [
   { id: 'absences', label: 'Absences', icon: '🏖️' },
   { id: 'equipe', label: 'Équipe', icon: '👥' },
   { id: 'bilan', label: 'Bilan', icon: '⚖️' },
-  { id: 'partage', label: 'Partager', icon: '🔗' },
+  { id: 'partage', label: 'Exporter', icon: '📤' },
 ] as const;
 type Tab = (typeof TABS)[number]['id'];
 
 export default function Home() {
-  const { state, update, replace, incoming, acceptIncoming, dismissIncoming, sync, config, connect, disconnect, syncNow } = usePlan();
+  const { state, update, replace, sync, syncNow } = usePlan();
   const [tab, setTab] = useState<Tab>('planning');
   const t = todayISO();
   const [cursor, setCursor] = useState({ year: Number(t.slice(0, 4)), month: Number(t.slice(5, 7)) });
@@ -51,22 +50,12 @@ export default function Home() {
       </header>
 
       <main className="mx-auto max-w-3xl px-3 py-4 sm:px-4">
-        {incoming && (
-          <div className="no-print mb-4 rounded-2xl border border-teal bg-teal-light p-4 text-sm text-teal-dark">
-            <p className="font-semibold">Tu as ouvert un planning partagé.</p>
-            <p className="mt-1">Il est différent de celui enregistré sur cet appareil. Le remplacer ?</p>
-            <div className="mt-3 flex gap-2">
-              <Button onClick={acceptIncoming}>Remplacer</Button>
-              <Button variant="ghost" onClick={dismissIncoming}>Garder le mien</Button>
-            </div>
-          </div>
-        )}
         {tab === 'planning' && <PlanningView state={state} update={update} cursor={cursor} setCursor={setCursor} />}
         {tab === 'absences' && <AbsencesView state={state} update={update} />}
         {tab === 'equipe' && <TeamView state={state} update={update} year={cursor.year} />}
         {tab === 'bilan' && <StatsView state={state} year={cursor.year} setYear={setYear} />}
         {tab === 'partage' && (
-          <ShareView state={state} replace={replace} year={cursor.year} sync={sync} config={config} connect={connect} disconnect={disconnect} syncNow={syncNow} />
+          <ShareView state={state} replace={replace} year={cursor.year} sync={sync} syncNow={syncNow} />
         )}
       </main>
 
@@ -90,13 +79,11 @@ export default function Home() {
 
 function SyncPill({ sync, onClick }: { sync: SyncStatus; onClick: () => void }) {
   const [label, cls] =
-    sync.mode === 'local'
-      ? ['Cet appareil seul', 'bg-amber-light text-amber']
-      : sync.phase === 'error'
-        ? ['Non synchronisé', 'bg-rose-light text-rose']
-        : sync.phase === 'syncing'
-          ? ['Synchronisation…', 'bg-paper text-muted']
-          : ['● Équipe à jour', 'bg-teal-light text-teal-dark'];
+    sync.phase === 'error'
+      ? ['Hors ligne', 'bg-rose-light text-rose']
+      : sync.phase === 'ok'
+        ? ['● À jour', 'bg-teal-light text-teal-dark']
+        : ['Synchronisation…', 'bg-paper text-muted'];
   return (
     <button onClick={onClick} className={`ml-auto mr-2 rounded-full px-3 py-1 text-xs font-semibold sm:ml-4 ${cls}`}>
       {label}

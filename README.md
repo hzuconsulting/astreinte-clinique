@@ -31,8 +31,8 @@ d'abord les **jours fériés**, ensuite les **week-ends**, enfin le **total**.
   option Alsace-Moselle, et ajout de jours spéciaux (fermeture de la clinique…).
 - **Bilan annuel** : fériés (avec les dates), jours de week-end, total, répartition
   par jour de semaine, et un indicateur « Équilibré / Écart ».
-- **Partage** : un lien contient tout le planning ; le collègue qui l'ouvre récupère
-  cette version. Export **.ics** par médecin pour l'agenda du téléphone, impression du
+- **Données communes** : une seule version, en ligne, identique pour tous.
+- **Export** : fichier **.ics** par médecin pour l'agenda du téléphone, impression du
   mois, sauvegarde/restauration en fichier JSON.
 
 ## Comment fonctionne l'assistant
@@ -53,32 +53,31 @@ Le code est dans `src/lib/scheduler.ts`, les tests dans `src/lib/scheduler.test.
 
 ## Où sont les données ?
 
-**Par défaut, sur l'appareil seulement** (pastille « Cet appareil seul » en haut).
+**Il n'y a qu'un seul planning**, enregistré en ligne sur Supabase : tout le monde
+voit les mêmes informations, quel que soit celui qui les modifie. Pas de compte, pas
+de session, pas d'invitation : on ouvre le site, c'est tout.
 
-**À plusieurs : un espace d'équipe en ligne**, sur Supabase (gratuit). Le planning
-entier est un document rangé sous un code d'équipe secret ; la table n'est jamais
-lisible directement, seulement via deux fonctions qui exigent ce code. Chaque
-modification est envoyée en ligne après une seconde, et celles des collègues
-arrivent toutes les 15 s et au retour sur l'appli. Si deux personnes modifient en
-même temps, les deux modifications sont fusionnées (sur un même jour, la dernière
-enregistrée l'emporte). Les modifications faites hors connexion partent au retour du
-réseau.
+- Chaque modification est envoyée en ligne après une demi-seconde ; celles des
+  autres arrivent toutes les 10 s et au retour sur l'appli. La pastille en haut
+  indique « ● À jour » ou « Hors ligne ».
+- Si deux personnes modifient en même temps, les deux modifications sont gardées
+  (sur un même jour, la dernière enregistrée l'emporte).
+- Chaque appareil garde une copie : l'appli s'affiche immédiatement et reste
+  consultable sans réseau ; une modification faite hors ligne part au retour du réseau.
 
-Mise en place, une fois :
+La connexion (URL du projet et clé *publishable*, faite pour être publique) est dans
+`src/lib/sync.ts`. Pour pointer une autre base sans toucher au code : variables
+`NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_KEY` au build.
 
-1. Créer un projet sur [supabase.com](https://supabase.com) (région Europe).
-2. **SQL Editor → New query** : coller `supabase/schema.sql`, puis **Run**.
-3. **Project Settings → API** : copier l'URL du projet et la clé publique
-   (*anon* ou *publishable* — jamais *service_role* ni *secret*).
-4. Dans l'appli, onglet **Partager → Travailler à plusieurs** : coller les deux
-   valeurs, puis **Créer l'espace d'équipe**. Le planning de l'appareil devient celui
-   de l'équipe.
-5. **Inviter un collègue** : le lien contient tout ce qu'il faut, il suffit de
-   l'ouvrir. Ce lien donne accès au planning : ne le diffuser qu'à l'équipe.
+Préparer une nouvelle base : **SQL Editor → New query**, coller
+`supabase/schema.sql`, **Run**. La table n'est pas lisible directement, seulement via
+deux fonctions.
 
-Remarque : un projet Supabase gratuit est mis en pause après une semaine sans aucune
-visite ; l'usage quotidien de l'appli suffit à l'éviter, sinon on le relance d'un clic
-depuis le tableau de bord Supabase.
+⚠️ Toute personne qui connaît l'adresse du site peut lire et modifier le planning.
+
+Un projet Supabase gratuit est mis en pause après une semaine sans aucune visite ;
+l'usage quotidien suffit à l'éviter, sinon on le relance d'un clic depuis le tableau
+de bord Supabase.
 
 ## Développer
 
