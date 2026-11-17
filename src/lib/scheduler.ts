@@ -17,8 +17,8 @@
  *     réattribuant ou en échangeant des blocs. Plusieurs essais, on garde le
  *     meilleur. Tout est déterministe pour une graine donnée.
  */
-import { addDays, eachDay, isWeekend, weekday, type ISODate } from './dates';
-import { holidayIndex, unavailability, yearOf, type Assignment, type PlanState } from './model';
+import { addDays, eachDay, weekday, type ISODate } from './dates';
+import { holidayIndex, isOnCallWeekend, unavailability, yearOf, type Assignment, type PlanState } from './model';
 
 export const WEIGHTS = {
   holiday: 6,
@@ -91,7 +91,7 @@ export class Evaluator {
     this.blockOf = new Int32Array(n);
     this.timeline = new Int16Array(n).fill(-1);
     this.days.forEach((d, i) => {
-      this.weekendFlag[i] = isWeekend(d) ? 1 : 0;
+      this.weekendFlag[i] = isOnCallWeekend(d, state.settings) ? 1 : 0;
       this.holidayFlag[i] = holidays.has(d) ? 1 : 0;
       this.wd[i] = weekday(d);
       const special = this.weekendFlag[i] || this.holidayFlag[i];
@@ -235,7 +235,8 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
       warnings.push({ date: d0, message: 'Tous les présents ont ce jour comme non travaillé : attribué quand même.' });
     }
     const priority = idx.some((i) => ev.isHoliday(i)) ? 2 : idx.some((i) => ev.isWeekendIdx(i)) ? 1 : 0;
-    units.push({ idx, allowed, priority });
+    // Jour non travaillé = interdit dès qu'un autre médecin peut prendre le bloc.
+    units.push({ idx, allowed: clean.length > 0 ? clean : allowed, priority });
   };
 
   const freeSorted = [...free].sort();

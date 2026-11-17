@@ -21,8 +21,10 @@ d'abord les **jours fériés**, ensuite les **week-ends**, enfin le **total**.
   l'assistant**, avec les raisons (« d'astreinte la veille », « jour non travaillé »,
   « absent — congrès »). Un choix manuel est verrouillé 🔒 : les générations suivantes
   n'y touchent plus.
-- **Week-ends groupés.** Samedi et dimanche vont à la même personne, avec le pont
-  férié accolé (vendredi de Noël, lundi de Pentecôte…). Désactivable.
+- **Week-ends groupés.** Le week-end d'astreinte va du **vendredi au dimanche**
+  (réglable en samedi → dimanche) et revient à une seule personne, avec le férié
+  accolé (jeudi de l'Ascension, lundi de Pâques…). Le vendredi compte comme un jour
+  de week-end dans l'équité. Désactivable.
 - **Repos minimum** entre deux astreintes (réglable, 1 jour par défaut).
 - **Part de la charge** par médecin (100 %, 80 %, 50 %…) pour un temps partiel.
 - **Fériés français** calculés automatiquement (Pâques, Ascension, Pentecôte…),

@@ -1,5 +1,5 @@
-import { eachDay, isWeekend, weekday, type ISODate } from './dates';
-import { holidayIndex, type PlanState } from './model';
+import { eachDay, weekday, type ISODate } from './dates';
+import { holidayIndex, isOnCallWeekend, type PlanState } from './model';
 
 export interface DoctorStats {
   doctorId: string;
@@ -35,7 +35,7 @@ export function yearStats(state: PlanState, year: number, from?: ISODate, to?: I
       continue;
     }
     r.total++;
-    if (isWeekend(d)) r.weekend++;
+    if (isOnCallWeekend(d, state.settings)) r.weekend++;
     if (holidays.has(d)) {
       r.holiday++;
       r.holidayDates.push(d);

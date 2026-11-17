@@ -113,11 +113,21 @@ function SettingsCard({ state, update, year }: Props) {
   return (
     <Card>
       <h2 className="mb-2 text-base font-bold text-ink">Règles de l’assistant</h2>
+      <label className="flex items-center justify-between gap-3 py-2 text-sm">
+        <span>
+          <span className="block font-medium text-ink">Week-end d’astreinte</span>
+          <span className="block text-xs text-muted">Ces jours comptent comme week-end dans l’équité.</span>
+        </span>
+        <select className={`${inputCls} !w-40`} value={s.weekendStart} onChange={(e) => set({ weekendStart: Number(e.target.value) as 4 | 5 })}>
+          <option value={4}>Ven. → dim.</option>
+          <option value={5}>Sam. → dim.</option>
+        </select>
+      </label>
       <Toggle
         checked={s.groupWeekends}
         onChange={(v) => set({ groupWeekends: v })}
         label="Week-end entier à la même personne"
-        hint="Samedi + dimanche, et le pont férié accolé (vendredi ou lundi)."
+        hint={`${s.weekendStart === 4 ? 'Vendredi, samedi et dimanche' : 'Samedi et dimanche'}, plus le férié accolé (jeudi de l’Ascension, lundi de Pâques…).`}
       />
       <label className="flex items-center justify-between gap-3 py-2 text-sm">
         <span>

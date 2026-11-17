@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, eachDay, isWeekend, weekday } from './dates';
+import { addDays, eachDay, weekday } from './dates';
 import { easterSunday, frenchHolidays } from './holidays';
 import { defaultState, type PlanState } from './model';
 import { generate, suggest } from './scheduler';
@@ -43,7 +43,7 @@ describe('générateur', () => {
     const spread = (f: (r: (typeof st.rows)[number]) => number) =>
       Math.max(...st.rows.map(f)) - Math.min(...st.rows.map(f));
     expect(spread((r) => r.holiday)).toBeLessThanOrEqual(1);
-    expect(spread((r) => r.weekend)).toBeLessThanOrEqual(2); // un week-end = 2 jours
+    expect(spread((r) => r.weekend)).toBeLessThanOrEqual(3); // un week-end = 3 jours
     expect(spread((r) => r.total)).toBeLessThanOrEqual(2);
   });
 
@@ -65,11 +65,35 @@ describe('générateur', () => {
     }
   });
 
-  it('donne le week-end entier à la même personne', () => {
+  it('donne le week-end entier (vendredi → dimanche) à la même personne', () => {
     const s = team();
     const r = generate(s, { from: '2027-03-01', to: '2027-03-31', seed: 4 });
-    for (const d of eachDay('2027-03-01', '2027-03-31')) {
-      if (weekday(d) === 5 && d < '2027-03-31') expect(r.assignments[addDays(d, 1)]!.doctorId).toBe(r.assignments[d]!.doctorId);
+    for (const d of eachDay('2027-03-01', '2027-03-28')) {
+      if (weekday(d) === 4) {
+        expect(r.assignments[addDays(d, 1)]!.doctorId).toBe(r.assignments[d]!.doctorId);
+        expect(r.assignments[addDays(d, 2)]!.doctorId).toBe(r.assignments[d]!.doctorId);
+      }
+    }
+    // Le vendredi compte comme un jour de week-end.
+    const st = yearStats({ ...s, assignments: r.assignments }, 2027, '2027-03-01', '2027-03-31');
+    expect(st.rows.reduce((n, x) => n + x.weekend, 0)).toBe(12); // 4 week-ends × 3 jours
+  });
+
+  it('accole le férié au week-end (lundi de Pâques → ven.-lun.)', () => {
+    const s = team();
+    const r = generate(s, { from: '2027-03-22', to: '2027-04-04', seed: 2 });
+    const who = r.assignments['2027-03-26']!.doctorId; // vendredi avant Pâques 2027
+    for (const d of ['2027-03-27', '2027-03-28', '2027-03-29']) expect(r.assignments[d]!.doctorId).toBe(who);
+  });
+
+  it('garde le réglage samedi → dimanche', () => {
+    const s = team();
+    s.settings.weekendStart = 5;
+    const r = generate(s, { from: '2027-03-01', to: '2027-03-31', seed: 4 });
+    const st = yearStats({ ...s, assignments: r.assignments }, 2027, '2027-03-01', '2027-03-31');
+    expect(st.rows.reduce((n, x) => n + x.weekend, 0)).toBe(8);
+    for (const d of eachDay('2027-03-01', '2027-03-28')) {
+      if (weekday(d) === 5) expect(r.assignments[addDays(d, 1)]!.doctorId).toBe(r.assignments[d]!.doctorId);
     }
   });
 
@@ -126,6 +150,5 @@ describe('partage', () => {
     const ics = buildIcs(s, 'd0', '2027-01-01', '2027-12-31');
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1);
     expect(ics).toContain('DTEND;VALUE=DATE:20270104');
-    expect(isWeekend('2027-01-02')).toBe(true);
   });
 });

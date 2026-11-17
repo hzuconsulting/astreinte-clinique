@@ -1,4 +1,4 @@
-import { isWeekend, toDate, weekday, type ISODate, type Weekday } from './dates';
+import { toDate, weekday, type ISODate, type Weekday } from './dates';
 import { frenchHolidays } from './holidays';
 
 export interface Doctor {
@@ -29,6 +29,8 @@ export interface Assignment {
 }
 
 export interface Settings {
+  /** Premier jour du week-end d'astreinte : 4 = vendredi, 5 = samedi. */
+  weekendStart: 4 | 5;
   /** Un même médecin prend tout le week-end, pont férié compris. */
   groupWeekends: boolean;
   /** Repos souhaité entre deux astreintes (en jours), hors bloc week-end. */
@@ -61,7 +63,7 @@ export function defaultState(): PlanState {
     ],
     absences: [],
     assignments: {},
-    settings: { groupWeekends: true, minRest: 1, alsaceMoselle: false, customHolidays: [] },
+    settings: { weekendStart: 4, groupWeekends: true, minRest: 1, alsaceMoselle: false, customHolidays: [] },
   };
 }
 
@@ -90,14 +92,9 @@ export function unavailability(state: PlanState, doctorId: string, date: ISODate
   return null;
 }
 
-export interface DayInfo {
-  date: ISODate;
-  weekend: boolean;
-  holiday: string | null;
-}
-
-export function dayInfo(date: ISODate, holidays: Map<ISODate, string>): DayInfo {
-  return { date, weekend: isWeekend(date), holiday: holidays.get(date) ?? null };
+/** Jour compté comme week-end d'astreinte (vendredi → dimanche par défaut). */
+export function isOnCallWeekend(date: ISODate, settings: Pick<Settings, 'weekendStart'>): boolean {
+  return weekday(date) >= (settings.weekendStart ?? 4);
 }
 
 export function yearOf(date: ISODate): number {

@@ -4,7 +4,7 @@ import {
   eachDay, formatLong, formatShort, monthBounds, MONTH_LABEL, todayISO, weekday, WEEKDAY_SHORT,
   type ISODate,
 } from '@/lib/dates';
-import { holidayIndex, unavailability, type PlanState } from '@/lib/model';
+import { holidayIndex, isOnCallWeekend, unavailability, type PlanState } from '@/lib/model';
 import { generate, suggest, type Warning } from '@/lib/scheduler';
 import { Button, Card, DoctorChip, Sheet, Toggle, inputCls } from './ui';
 
@@ -54,7 +54,7 @@ export function PlanningView({ state, update, cursor, setCursor }: Props) {
       <Card className="no-print !p-2 sm:!p-3">
         <div className="grid grid-cols-7 gap-1 pb-1 text-center text-[11px] font-semibold uppercase text-muted">
           {WEEKDAY_SHORT.map((w, i) => (
-            <div key={i} className={i >= 5 ? 'text-teal' : ''}>{w}</div>
+            <div key={i} className={i >= state.settings.weekendStart ? 'text-teal' : ''}>{w}</div>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1">
@@ -63,7 +63,7 @@ export function PlanningView({ state, update, cursor, setCursor }: Props) {
             const a = state.assignments[d];
             const doc = a ? docs.get(a.doctorId) : undefined;
             const hol = holidays.get(d);
-            const we = weekday(d) >= 5;
+            const we = isOnCallWeekend(d, state.settings);
             const absentIds = state.doctors.filter((x) => unavailability(state, x.id, d)?.kind === 'absence');
             const conflict = a && unavailability(state, a.doctorId, d)?.kind === 'absence';
             return (
@@ -164,7 +164,7 @@ function PrintList({ state, days, holidays, title }: { state: PlanState; days: I
       <table className="w-full border-collapse text-sm">
         <tbody>
           {days.map((d) => (
-            <tr key={d} className={weekday(d) >= 5 || holidays.has(d) ? 'bg-gray-100' : ''}>
+            <tr key={d} className={isOnCallWeekend(d, state.settings) || holidays.has(d) ? 'bg-gray-100' : ''}>
               <td className="border px-2 py-0.5">{formatShort(d)}</td>
               <td className="border px-2 py-0.5">{holidays.get(d) ?? ''}</td>
               <td className="border px-2 py-0.5 font-semibold">{docs.get(state.assignments[d]?.doctorId ?? '')?.name ?? ''}</td>
