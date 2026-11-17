@@ -26,6 +26,11 @@ d'abord les **jours fériés**, ensuite les **week-ends**, enfin le **total**.
   accolé (jeudi de l'Ascension, lundi de Pâques…). Le vendredi compte comme un jour
   de week-end dans l'équité. Désactivable.
 - **Repos minimum** entre deux astreintes (réglable, 1 jour par défaut).
+- **Pas deux week-ends d'affilée** pour la même personne, si c'est possible ; sinon
+  c'est signalé après la génération.
+- **Jours d'astreinte consécutifs max** (4 par défaut, réglable de 1 à 7 ou sans
+  limite). Un week-end prolongé plus long est partagé : le week-end reste entier, le
+  férié accolé va à quelqu'un d'autre.
 - **Part de la charge** par médecin (100 %, 80 %, 50 %…) pour un temps partiel.
 - **Fériés français** calculés automatiquement (Pâques, Ascension, Pentecôte…),
   option Alsace-Moselle, et ajout de jours spéciaux (fermeture de la clinique…).

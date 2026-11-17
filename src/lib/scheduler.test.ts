@@ -165,3 +165,54 @@ describe('week-ends non travaillés', () => {
     expect(r.assignments['2027-03-06']).toBeDefined();
   });
 });
+
+describe('week-ends d’affilée et jours consécutifs', () => {
+  const weekendOwners = (r: ReturnType<typeof generate>, from: string, to: string) =>
+    eachDay(from, to).filter((d) => weekday(d) === 5).map((d) => r.assignments[d]!.doctorId);
+
+  it('évite deux week-ends d’affilée à la même personne', () => {
+    const s = team();
+    const r = generate(s, { from: '2027-01-01', to: '2027-12-31', seed: 3 });
+    const owners = weekendOwners(r, '2027-01-01', '2027-12-31');
+    const repeats = owners.filter((o, k) => k > 0 && o === owners[k - 1]).length;
+    expect(repeats).toBe(0);
+    expect(r.warnings.filter((w) => w.message.includes('week-ends'))).toEqual([]);
+  });
+
+  it('signale les week-ends d’affilée inévitables', () => {
+    const s = team();
+    // Deux médecins absents trois semaines : le troisième enchaîne forcément.
+    s.absences = [
+      { id: 'a', doctorId: 'd0', start: '2027-07-01', end: '2027-07-25', label: '' },
+      { id: 'b', doctorId: 'd1', start: '2027-07-01', end: '2027-07-25', label: '' },
+    ];
+    const r = generate(s, { from: '2027-07-01', to: '2027-07-31', seed: 1 });
+    expect(r.warnings.some((w) => w.message.includes('deux week-ends'))).toBe(true);
+  });
+
+  it('respecte le maximum de jours consécutifs, week-end compris', () => {
+    const s = team();
+    s.settings.maxConsecutive = 3;
+    const r = generate(s, { from: '2027-01-01', to: '2027-12-31', seed: 2 });
+    let run = 0;
+    let prev = '';
+    for (const d of eachDay('2027-01-01', '2027-12-31')) {
+      const who = r.assignments[d]!.doctorId;
+      run = who === prev ? run + 1 : 1;
+      prev = who;
+      expect(run).toBeLessThanOrEqual(3);
+    }
+    // Pâques 2027 : ven. 26 → lun. 29 mars, 4 jours > 3 → le lundi revient à quelqu'un d'autre.
+    expect(r.assignments['2027-03-29']!.doctorId).not.toBe(r.assignments['2027-03-28']!.doctorId);
+    expect(r.assignments['2027-03-28']!.doctorId).toBe(r.assignments['2027-03-26']!.doctorId);
+  });
+
+  it('avec un maximum de 1, jamais deux jours de suite', () => {
+    const s = team();
+    s.settings.maxConsecutive = 1;
+    const r = generate(s, { from: '2027-03-01', to: '2027-04-30', seed: 5 });
+    for (const d of eachDay('2027-03-02', '2027-04-30')) {
+      expect(r.assignments[d]!.doctorId).not.toBe(r.assignments[addDays(d, -1)]!.doctorId);
+    }
+  });
+});

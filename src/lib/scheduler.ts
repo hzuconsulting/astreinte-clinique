@@ -26,6 +26,10 @@ export const WEIGHTS = {
   total: 1,
   weekday: 0.3,
   rest: 4,
+  /** Deux week-ends d'affilée pour la même personne. */
+  backToBack: 200,
+  /** Par jour au-delà du maximum de jours consécutifs. */
+  overRun: 300,
   off: 500,
 };
 
@@ -78,6 +82,10 @@ export class Evaluator {
   private readonly off: Uint8Array; // nd * 7
   private readonly w: number[];
   private readonly minRest: number;
+  private readonly maxRun: number;
+  private readonly avoidB2B: boolean;
+  /** Numéro de semaine (lundi → dimanche) de chaque jour de la fenêtre. */
+  private readonly week: Int32Array;
 
   constructor(readonly state: PlanState, windowFrom: ISODate, windowTo: ISODate) {
     this.days = eachDay(windowFrom, windowTo);
@@ -90,7 +98,12 @@ export class Evaluator {
     this.wd = new Uint8Array(n);
     this.blockOf = new Int32Array(n);
     this.timeline = new Int16Array(n).fill(-1);
+    this.week = new Int32Array(n);
+    this.maxRun = Math.max(0, state.settings.maxConsecutive | 0);
+    this.avoidB2B = state.settings.avoidBackToBackWeekends ?? true;
+    const firstWd = n ? weekday(this.days[0]!) : 0;
     this.days.forEach((d, i) => {
+      this.week[i] = Math.floor((i + firstWd) / 7);
       this.weekendFlag[i] = isOnCallWeekend(d, state.settings) ? 1 : 0;
       this.holidayFlag[i] = holidays.has(d) ? 1 : 0;
       this.wd[i] = weekday(d);
@@ -98,6 +111,7 @@ export class Evaluator {
       const prevSpecial = i > 0 && (this.weekendFlag[i - 1] || this.holidayFlag[i - 1]);
       this.blockOf[i] = state.settings.groupWeekends && special && prevSpecial ? this.blockOf[i - 1]! : i;
     });
+    if (this.maxRun > 0) this.splitLongBlocks();
     this.off = new Uint8Array(this.nd * 7);
     state.doctors.forEach((doc, k) => doc.offWeekdays.forEach((x) => isOffDay(state, doc, x) && (this.off[k * 7 + x] = 1)));
     this.w = state.doctors.map((d) => Math.max(0.05, (d.share || 100) / 100));
@@ -107,6 +121,32 @@ export class Evaluator {
       const i = this.index.get(date);
       const k = docIndex.get(a.doctorId);
       if (i !== undefined && k !== undefined) this.timeline[i] = k;
+    }
+  }
+
+  /**
+   * Un bloc plus long que le maximum de jours consécutifs (ex. ven. → lun. de
+   * Pâques avec un maximum de 3) est coupé : on garde le week-end entier et on
+   * détache les fériés accolés ; si le week-end seul dépasse encore, il est
+   * coupé en tranches.
+   */
+  private splitLongBlocks(): void {
+    const n = this.blockOf.length;
+    let i = 0;
+    while (i < n) {
+      let j = i;
+      while (j + 1 < n && this.blockOf[j + 1] === this.blockOf[i]) j++;
+      if (j - i + 1 > this.maxRun) {
+        let a = i;
+        while (a <= j) {
+          const kind = this.weekendFlag[a];
+          let b = a;
+          while (b + 1 <= j && this.weekendFlag[b + 1] === kind) b++;
+          for (let c = a; c <= b; c++) this.blockOf[c] = a + Math.floor((c - a) / this.maxRun) * this.maxRun;
+          a = b + 1;
+        }
+      }
+      i = j + 1;
     }
   }
 
@@ -143,6 +183,11 @@ export class Evaluator {
     const lastBlock = new Int32Array(nd).fill(-1);
     let rest = 0;
     let off = 0;
+    let overRun = 0;
+    let b2b = 0;
+    const run = new Int32Array(nd);
+    const lastWeekendWeek = new Int32Array(nd).fill(-10);
+    const maxRun = this.maxRun;
     const tl = this.timeline;
     const limit = this.minRest;
     for (let i = 0; i < tl.length; i++) {
@@ -159,6 +204,15 @@ export class Evaluator {
         const p = limit + 1 - gap;
         rest += p * p;
       }
+      run[d] = gap === 1 ? run[d]! + 1 : 1;
+      if (maxRun > 0 && run[d]! > maxRun) overRun += run[d]! - maxRun;
+      if (this.avoidB2B && this.weekendFlag[i]) {
+        const w = this.week[i]!;
+        if (lastWeekendWeek[d] !== w) {
+          if (lastWeekendWeek[d] === w - 1) b2b++;
+          lastWeekendWeek[d] = w;
+        }
+      }
       last[d] = i;
       lastBlock[d] = this.blockOf[i]!;
     }
@@ -174,6 +228,8 @@ export class Evaluator {
       WEIGHTS.total * this.spread(tot) +
       WEIGHTS.weekday * wdSpread +
       WEIGHTS.rest * rest +
+      WEIGHTS.backToBack * b2b +
+      WEIGHTS.overRun * overRun +
       WEIGHTS.off * off
     );
   }
@@ -348,8 +404,73 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
       }
     }
   }
+  warnings.push(...ruleWarnings(state, out, from, to));
   warnings.sort((a, b) => a.date.localeCompare(b.date));
   return { assignments: out, warnings, cost: bestCost };
+}
+
+/**
+ * Ce que l'assistant n'a pas pu éviter : séries de jours au-delà du maximum,
+ * week-ends d'affilée pour la même personne.
+ */
+export function ruleWarnings(
+  state: PlanState,
+  assignments: Record<ISODate, Assignment>,
+  from: ISODate,
+  to: ISODate,
+): Warning[] {
+  const out: Warning[] = [];
+  const name = (id: string) => state.doctors.find((d) => d.id === id)?.name ?? '?';
+  const max = state.settings.maxConsecutive | 0;
+  const days = eachDay(addDays(from, -7), addDays(to, 7));
+
+  if (max > 0) {
+    let who: string | null = null;
+    let start = '';
+    let len = 0;
+    const close = (end: ISODate) => {
+      if (who && len > max && start <= to && end >= from) {
+        out.push({ date: start, message: `${name(who)} : ${len} jours d’astreinte d’affilée (max ${max}).` });
+      }
+    };
+    for (const d of days) {
+      const doc = assignments[d]?.doctorId ?? null;
+      if (doc && doc === who) {
+        len++;
+        continue;
+      }
+      close(addDays(d, -1));
+      who = doc;
+      start = d;
+      len = doc ? 1 : 0;
+    }
+    close(days[days.length - 1]!);
+  }
+
+  if (state.settings.avoidBackToBackWeekends ?? true) {
+    const weekendOf = (sunday: ISODate) => {
+      const ids = new Set<string>();
+      let first: ISODate | null = null;
+      for (let k = 6; k >= 0; k--) {
+        const d = addDays(sunday, -k);
+        if (!isOnCallWeekend(d, state.settings)) continue;
+        first ??= d;
+        const a = assignments[d];
+        if (a) ids.add(a.doctorId);
+      }
+      return { ids, first: first ?? sunday };
+    };
+    for (const d of days) {
+      if (weekday(d) !== 6) continue;
+      const cur = weekendOf(d);
+      if (cur.first < from || cur.first > to) continue;
+      const prev = weekendOf(addDays(d, -7));
+      for (const id of cur.ids) {
+        if (prev.ids.has(id)) out.push({ date: cur.first, message: `${name(id)} : deux week-ends d’affilée.` });
+      }
+    }
+  }
+  return out;
 }
 
 export interface Suggestion {
@@ -375,6 +496,24 @@ export function suggest(state: PlanState, date: ISODate): Suggestion[] {
     let blocked: string | null = null;
     if (u?.kind === 'absence') blocked = u.label;
     if (u?.kind === 'off') notes.push('Jour non travaillé');
+    // Série de jours consécutifs si on lui confie ce jour.
+    let run = 1;
+    for (let j = i - 1; j >= 0 && ev.timeline[j] === k; j--) run++;
+    for (let j = i + 1; j < ev.timeline.length && ev.timeline[j] === k; j++) run++;
+    const max = state.settings.maxConsecutive | 0;
+    if (max > 0 && run > max) notes.push(`${run} jours d’affilée (max ${max})`);
+    if ((state.settings.avoidBackToBackWeekends ?? true) && ev.isWeekendIdx(i)) {
+      for (const g of [-7, 7]) {
+        let hit = false;
+        for (let j = i + g - 3; j <= i + g + 3; j++) {
+          if (j >= 0 && j < ev.timeline.length && ev.isWeekendIdx(j) && ev.timeline[j] === k && Math.abs(j - i) > 3) hit = true;
+        }
+        if (hit) {
+          notes.push(g < 0 ? 'Déjà d’astreinte le week-end précédent' : 'D’astreinte le week-end suivant');
+          break;
+        }
+      }
+    }
     for (let g = 1; g <= Math.max(1, minRest); g++) {
       const before = ev.timeline[i - g];
       const after = ev.timeline[i + g];

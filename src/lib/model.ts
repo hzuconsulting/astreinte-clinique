@@ -35,6 +35,10 @@ export interface Settings {
   groupWeekends: boolean;
   /** Repos souhaité entre deux astreintes (en jours), hors bloc week-end. */
   minRest: number;
+  /** Jours d'astreinte d'affilée au maximum pour une même personne (0 = sans limite). */
+  maxConsecutive: number;
+  /** Éviter, si possible, deux week-ends d'affilée à la même personne. */
+  avoidBackToBackWeekends: boolean;
   alsaceMoselle: boolean;
   customHolidays: { date: ISODate; name: string }[];
 }
@@ -63,7 +67,7 @@ export function defaultState(): PlanState {
     ],
     absences: [],
     assignments: {},
-    settings: { weekendStart: 4, groupWeekends: true, minRest: 1, alsaceMoselle: false, customHolidays: [] },
+    settings: { weekendStart: 4, groupWeekends: true, minRest: 1, maxConsecutive: 4, avoidBackToBackWeekends: true, alsaceMoselle: false, customHolidays: [] },
   };
 }
 

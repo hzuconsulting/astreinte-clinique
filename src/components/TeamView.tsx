@@ -138,6 +138,22 @@ function SettingsCard({ state, update, year }: Props) {
           {[0, 1, 2, 3].map((n) => <option key={n} value={n}>{n} j</option>)}
         </select>
       </label>
+      <label className="flex items-center justify-between gap-3 py-2 text-sm">
+        <span>
+          <span className="block font-medium text-ink">Jours d’astreinte consécutifs max</span>
+          <span className="block text-xs text-muted">Pour une même personne, week-end compris. Un week-end prolongé plus long est partagé.</span>
+        </span>
+        <select className={`${inputCls} !w-32`} value={s.maxConsecutive} onChange={(e) => set({ maxConsecutive: Number(e.target.value) })}>
+          {[1, 2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{n} j</option>)}
+          <option value={0}>Sans limite</option>
+        </select>
+      </label>
+      <Toggle
+        checked={s.avoidBackToBackWeekends}
+        onChange={(v) => set({ avoidBackToBackWeekends: v })}
+        label="Éviter deux week-ends d’affilée"
+        hint="Pour une même personne, si c’est possible (sinon c’est signalé après la génération)."
+      />
       <Toggle checked={s.alsaceMoselle} onChange={(v) => set({ alsaceMoselle: v })} label="Fériés d’Alsace-Moselle" hint="Ajoute Vendredi saint et 26 décembre." />
 
       <h3 className="mb-2 mt-4 text-sm font-bold text-ink">Jours fériés {year}</h3>
