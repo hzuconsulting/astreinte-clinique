@@ -1,7 +1,7 @@
 'use client';
-import { formatShort, WEEKDAY_SHORT } from '@/lib/dates';
+import { formatShort, todayISO, WEEKDAY_SHORT } from '@/lib/dates';
 import type { PlanState } from '@/lib/model';
-import { yearStats } from '@/lib/stats';
+import { balances, yearStats } from '@/lib/stats';
 import { Card, DoctorChip } from './ui';
 
 type Props = { state: PlanState; year: number; setYear: (y: number) => void };
@@ -31,6 +31,8 @@ export function StatsView({ state, year, setYear }: Props) {
           {st.unassigned} jour{st.unassigned > 1 ? 's' : ''} de {year} sans astreinte attribuée.
         </p>
       )}
+
+      <BalanceCard state={state} year={year} />
 
       {metrics.map((m) => {
         const vals = st.rows.map((r) => {
@@ -110,5 +112,53 @@ export function StatsView({ state, year, setYear }: Props) {
         </div>
       </Card>
     </div>
+  );
+}
+
+function BalanceCard({ state, year }: { state: PlanState; year: number }) {
+  const today = todayISO();
+  const to = today.startsWith(String(year)) ? today : `${year}-12-31`;
+  const { from, rows } = balances(state, to);
+  const docs = new Map(state.doctors.map((d) => [d.id, d]));
+  const fmt = (v: number) => {
+    const r = Math.round(v);
+    return r === 0 ? '0' : r > 0 ? `+${r}` : `${r}`;
+  };
+  const cls = (v: number, tol: number) =>
+    Math.abs(v) <= tol ? 'bg-teal-light text-teal-dark' : v > 0 ? 'bg-rose-light text-rose' : 'bg-amber-light text-amber';
+  if (rows.every((r) => r.total === 0)) return null;
+  return (
+    <Card>
+      <h2 className="text-sm font-bold text-ink">Solde à reporter</h2>
+      <p className="mt-1 text-xs text-muted">
+        Écart de chacun à sa part équitable, du {formatShort(from)} au {formatShort(to)} (en jours). Positif = a fait plus que sa
+        part. L’assistant rattrape ces écarts dès les prochains mois générés.
+      </p>
+      <table className="mt-3 w-full text-center text-sm">
+        <thead>
+          <tr className="text-xs text-muted">
+            <th />
+            <th className="font-semibold">Fériés</th>
+            <th className="font-semibold">Week-ends</th>
+            <th className="font-semibold">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const d = docs.get(r.doctorId)!;
+            return (
+              <tr key={r.doctorId}>
+                <td className="py-1 text-left"><span className="inline-flex items-center gap-2"><DoctorChip doctor={d} size="sm" /><span className="truncate text-ink">{d.name}</span></span></td>
+                {[[r.holiday, 0.7], [r.weekend, 1.6], [r.total, 2]].map(([v, tol], i) => (
+                  <td key={i} className="p-0.5">
+                    <span className={`inline-block min-w-12 rounded-full px-2 py-0.5 text-xs font-bold ${cls(v!, tol!)}`}>{fmt(v!)}</span>
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Card>
   );
 }

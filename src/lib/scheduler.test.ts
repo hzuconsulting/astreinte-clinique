@@ -216,3 +216,50 @@ describe('week-ends d’affilée et jours consécutifs', () => {
     }
   });
 });
+
+describe('rattrapage des déséquilibres', () => {
+  const weekendDays = (a: Record<string, { doctorId: string }>, id: string, from: string, to: string) =>
+    eachDay(from, to).filter((d) => weekday(d) >= 4 && a[d]?.doctorId === id).length;
+
+  it('compense en janvier un mois de décembre déséquilibré (changement d’année)', () => {
+    const s = team();
+    // Décembre 2026 imposé : Dr A a 3 week-ends sur 4, Dr B un seul, Dr C aucun.
+    const owner: Record<number, string> = { 4: 'd0', 11: 'd0', 18: 'd0', 25: 'd1' };
+    for (const d of eachDay('2026-12-01', '2026-12-31')) {
+      const fri = Number(addDays(d, -((weekday(d) + 3) % 7)).slice(8));
+      const isWe = weekday(d) >= 4;
+      s.assignments[d] = { doctorId: isWe ? (owner[fri] ?? 'd1') : ['d1', 'd2', 'd2'][Number(d.slice(8)) % 3]!, locked: true };
+    }
+    const r = generate(s, { from: '2027-01-01', to: '2027-01-31', seed: 1 });
+    const a = weekendDays(r.assignments, 'd0', '2027-01-01', '2027-01-31');
+    const c = weekendDays(r.assignments, 'd2', '2027-01-01', '2027-01-31');
+    expect(a).toBe(0); // Dr A n'a aucun week-end en janvier
+    expect(c).toBeGreaterThanOrEqual(6); // Dr C rattrape
+  });
+
+  it('rattrape dès le mois suivant après une absence', () => {
+    const s = team();
+    s.absences = [{ id: 'a', doctorId: 'd0', start: '2027-03-01', end: '2027-03-31', label: 'Vacances' }];
+    const r = generate(s, { from: '2027-01-01', to: '2027-12-31', seed: 4 });
+    const st = (to: string) =>
+      ['d0', 'd1', 'd2'].map((id) => weekendDays(r.assignments, id, '2027-01-01', to));
+    const endApril = st('2027-04-30');
+    const endMay = st('2027-05-31');
+    // Fin mars, Dr A a un retard d'au moins 4 week-ends ; fin mai, il est rattrapé à un week-end près.
+    expect(Math.max(...endMay) - Math.min(...endMay)).toBeLessThanOrEqual(3);
+    expect(endApril[0]).toBeGreaterThan(0);
+  });
+});
+
+describe('solde', () => {
+  it('mesure l’écart à la part équitable', async () => {
+    const { balances } = await import('./stats');
+    const s = team();
+    // 6 jours : A en a 4, B 2, C 0 → part = 2 chacun.
+    ['2027-01-04', '2027-01-05', '2027-01-06', '2027-01-07'].forEach((d) => (s.assignments[d] = { doctorId: 'd0', locked: false }));
+    ['2027-01-11', '2027-01-12'].forEach((d) => (s.assignments[d] = { doctorId: 'd1', locked: false }));
+    const b = balances(s, '2027-01-31');
+    expect(b.rows.map((r) => Math.round(r.total))).toEqual([2, 0, -2]);
+    expect(b.from).toBe('2027-01-04');
+  });
+});

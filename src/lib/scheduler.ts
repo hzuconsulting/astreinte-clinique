@@ -31,6 +31,13 @@ export const WEIGHTS = {
   /** Par jour au-delà du maximum de jours consécutifs. */
   overRun: 300,
   off: 500,
+  /**
+   * Écart cumulé relevé à la fin de chaque mois. Un déséquilibre qui dure coûte
+   * un peu plus chaque mois : il est donc rattrapé dès que possible.
+   */
+  monthlyHoliday: 3,
+  monthlyWeekend: 1.5,
+  monthlyTotal: 0.5,
 };
 
 export interface Warning {
@@ -86,6 +93,9 @@ export class Evaluator {
   private readonly avoidB2B: boolean;
   /** Numéro de semaine (lundi → dimanche) de chaque jour de la fenêtre. */
   private readonly week: Int32Array;
+  private readonly monthEnd: Uint8Array;
+  /** Dernier jour (index) où l'on relève l'écart mensuel : au-delà, rien n'est encore planifié. */
+  checkpointUntil: number;
 
   constructor(readonly state: PlanState, windowFrom: ISODate, windowTo: ISODate) {
     this.days = eachDay(windowFrom, windowTo);
@@ -99,6 +109,7 @@ export class Evaluator {
     this.blockOf = new Int32Array(n);
     this.timeline = new Int16Array(n).fill(-1);
     this.week = new Int32Array(n);
+    this.monthEnd = new Uint8Array(n);
     this.maxRun = Math.max(0, state.settings.maxConsecutive | 0);
     this.avoidB2B = state.settings.avoidBackToBackWeekends ?? true;
     const firstWd = n ? weekday(this.days[0]!) : 0;
@@ -112,6 +123,7 @@ export class Evaluator {
       this.blockOf[i] = state.settings.groupWeekends && special && prevSpecial ? this.blockOf[i - 1]! : i;
     });
     if (this.maxRun > 0) this.splitLongBlocks();
+    for (let i = 0; i < n; i++) this.monthEnd[i] = i === n - 1 || this.days[i + 1]!.endsWith('-01') ? 1 : 0;
     this.off = new Uint8Array(this.nd * 7);
     state.doctors.forEach((doc, k) => doc.offWeekdays.forEach((x) => isOffDay(state, doc, x) && (this.off[k * 7 + x] = 1)));
     this.w = state.doctors.map((d) => Math.max(0.05, (d.share || 100) / 100));
@@ -122,6 +134,9 @@ export class Evaluator {
       const k = docIndex.get(a.doctorId);
       if (i !== undefined && k !== undefined) this.timeline[i] = k;
     }
+    let lastAssigned = -1;
+    this.timeline.forEach((k, i) => k >= 0 && (lastAssigned = i));
+    this.checkpointUntil = lastAssigned;
   }
 
   /**
@@ -190,7 +205,12 @@ export class Evaluator {
     const maxRun = this.maxRun;
     const tl = this.timeline;
     const limit = this.minRest;
+    let monthly = 0;
+    const until = this.checkpointUntil;
     for (let i = 0; i < tl.length; i++) {
+      if (i > 0 && this.monthEnd[i - 1] && i - 1 <= until) {
+        monthly += WEIGHTS.monthlyHoliday * this.spread(ho) + WEIGHTS.monthlyWeekend * this.spread(we) + WEIGHTS.monthlyTotal * this.spread(tot);
+      }
       const d = tl[i]!;
       if (d < 0) continue;
       tot[d]!++;
@@ -216,6 +236,9 @@ export class Evaluator {
       last[d] = i;
       lastBlock[d] = this.blockOf[i]!;
     }
+    if (this.monthEnd[tl.length - 1] && tl.length - 1 <= until) {
+      monthly += WEIGHTS.monthlyHoliday * this.spread(ho) + WEIGHTS.monthlyWeekend * this.spread(we) + WEIGHTS.monthlyTotal * this.spread(tot);
+    }
     let wdSpread = 0;
     const col = new Float64Array(nd);
     for (let x = 0; x < 7; x++) {
@@ -227,6 +250,7 @@ export class Evaluator {
       WEIGHTS.weekend * this.spread(we) +
       WEIGHTS.total * this.spread(tot) +
       WEIGHTS.weekday * wdSpread +
+      monthly +
       WEIGHTS.rest * rest +
       WEIGHTS.backToBack * b2b +
       WEIGHTS.overRun * overRun +
@@ -241,14 +265,28 @@ interface Unit {
   priority: number; // 2 = contient un férié, 1 = week-end, 0 = semaine
 }
 
-export function fairnessWindow(from: ISODate, to: ISODate): { from: ISODate; to: ISODate } {
-  return { from: `${yearOf(from)}-01-01`, to: `${yearOf(to)}-12-31` };
+/** Historique pris en compte pour l'équité : jusqu'à 24 mois avant la période. */
+export const HISTORY_MONTHS = 24;
+
+/**
+ * Fenêtre d'équité : depuis la première astreinte connue (au plus 24 mois en
+ * arrière, et au moins depuis le 1er janvier) jusqu'au 31 décembre de la fin
+ * de période. Le passé n'est donc pas oublié au changement d'année.
+ */
+export function fairnessWindow(state: PlanState, from: ISODate, to: ISODate): { from: ISODate; to: ISODate } {
+  const y = yearOf(from);
+  const m = Number(from.slice(5, 7));
+  const total = y * 12 + (m - 1) - HISTORY_MONTHS;
+  const limit = `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}-01`;
+  let start = `${y}-01-01`;
+  for (const d of Object.keys(state.assignments)) if (d < start && d >= limit && d < from) start = d;
+  return { from: start.slice(0, 8) + '01', to: `${yearOf(to)}-12-31` };
 }
 
 export function generate(state: PlanState, opts: GenerateOptions): GenerateResult {
   const { from, to } = opts;
   const replace = opts.replaceUnlocked ?? true;
-  const win = fairnessWindow(from, to);
+  const win = fairnessWindow(state, from, to);
 
   // Les jours de la plage qu'on va (re)calculer sont retirés de l'historique.
   const base: PlanState = { ...state, assignments: { ...state.assignments } };
@@ -262,6 +300,7 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
   }
 
   const ev = new Evaluator(base, win.from, win.to);
+  ev.checkpointUntil = Math.max(ev.checkpointUntil, ev.index.get(to)!);
   const nd = ev.nd;
   const warnings: Warning[] = [];
   if (nd === 0) return { assignments: {}, warnings: [{ date: from, message: 'Aucun médecin dans l’équipe.' }], cost: 0 };
@@ -483,11 +522,12 @@ export interface Suggestion {
 
 /** Classe les médecins pour un jour donné, avec les raisons. */
 export function suggest(state: PlanState, date: ISODate): Suggestion[] {
-  const win = fairnessWindow(date, date);
+  const win = fairnessWindow(state, date, date);
   const without: PlanState = { ...state, assignments: { ...state.assignments } };
   delete without.assignments[date];
   const ev = new Evaluator(without, win.from, win.to);
   const i = ev.index.get(date)!;
+  ev.checkpointUntil = Math.max(ev.checkpointUntil, i);
   const base = ev.cost();
   const minRest = state.settings.minRest;
   const res = state.doctors.map((doc, k): Suggestion => {

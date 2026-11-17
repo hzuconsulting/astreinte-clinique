@@ -11,8 +11,12 @@ d'abord les **jours fériés**, ensuite les **week-ends**, enfin le **total**.
 - **Calendrier mensuel.** Chaque jour affiche le médecin d'astreinte (initiales en
   couleur), les fériés (★), les absents (points) et les conflits (cadre rouge).
 - **Assistant de génération.** Un bouton remplit le mois, la fin de l'année, l'année
-  entière ou une période libre. Il tient compte de tout ce qui est déjà planifié dans
-  l'année : si quelqu'un a beaucoup donné au premier trimestre, il est épargné ensuite.
+  entière ou une période libre. Il tient compte de tout l'historique (jusqu'à 24 mois,
+  sans coupure au changement d'année) et **rattrape les déséquilibres dès que
+  possible** : un médecin qui a eu 3 week-ends sur 4 en est épargné le mois suivant,
+  ou le suivant encore si les absences ne le permettent pas.
+- **Solde à reporter** (onglet Bilan) : l'écart de chacun à sa part équitable en
+  fériés, week-ends et total.
 - **Jours travaillés récurrents.** Pour chaque médecin, on coche les jours de la
   semaine où il travaille (ex. pas le lundi). Il n'est jamais mis d'astreinte un jour
   non travaillé — sauf si personne d'autre n'est présent, et c'est alors signalé.
@@ -49,7 +53,9 @@ centaines de millisecondes pour une année. Aucune donnée ne quitte le téléph
 
 1. Le calendrier est découpé en blocs : un week-end (+ pont) est un bloc, un jour de
    semaine est un bloc d'un jour, les jours verrouillés sont fixes.
-2. Une fonction de coût mesure l'iniquité sur l'année civile (historique compris) :
+2. Une fonction de coût mesure l'iniquité sur tout l'historique (24 mois max), et
+   relève en plus l'écart cumulé à la fin de chaque mois — un déséquilibre qui dure
+   coûte un peu plus chaque mois, il est donc rattrapé au plus tôt. Poids :
    écart des fériés (poids 6), des jours de week-end (3), du total (1), des jours de
    semaine (0,3), astreintes trop rapprochées (4), jour non travaillé (500).
    Les absences sont des interdits absolus.
