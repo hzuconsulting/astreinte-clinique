@@ -18,7 +18,7 @@
  *     meilleur. Tout est déterministe pour une graine donnée.
  */
 import { addDays, eachDay, weekday, type ISODate } from './dates';
-import { holidayIndex, isOnCallWeekend, unavailability, yearOf, type Assignment, type PlanState } from './model';
+import { holidayIndex, isOffDay, isOnCallWeekend, unavailability, yearOf, type Assignment, type PlanState } from './model';
 
 export const WEIGHTS = {
   holiday: 6,
@@ -99,7 +99,7 @@ export class Evaluator {
       this.blockOf[i] = state.settings.groupWeekends && special && prevSpecial ? this.blockOf[i - 1]! : i;
     });
     this.off = new Uint8Array(this.nd * 7);
-    state.doctors.forEach((doc, k) => doc.offWeekdays.forEach((x) => (this.off[k * 7 + x] = 1)));
+    state.doctors.forEach((doc, k) => doc.offWeekdays.forEach((x) => isOffDay(state, doc, x) && (this.off[k * 7 + x] = 1)));
     this.w = state.doctors.map((d) => Math.max(0.05, (d.share || 100) / 100));
     this.minRest = Math.max(0, state.settings.minRest | 0);
     const docIndex = new Map(state.doctors.map((d, k) => [d.id, k]));
@@ -212,7 +212,7 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
 
   // Disponibilité (absences = interdit ; jour non travaillé = autorisé mais très pénalisé).
   const absent = (k: number, d: ISODate) => unavailability(state, state.doctors[k]!.id, d)?.kind === 'absence';
-  const offDay = (k: number, d: ISODate) => state.doctors[k]!.offWeekdays.includes(weekday(d));
+  const offDay = (k: number, d: ISODate) => isOffDay(state, state.doctors[k]!, weekday(d));
 
   // Découpage en blocs.
   const units: Unit[] = [];
@@ -231,7 +231,8 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
       warnings.push({ date: d0, message: 'Personne n’est disponible (tout le monde est absent).' });
       return;
     }
-    if (clean.length === 0) {
+    // Pas d'alerte pour le week-end : y être d'astreinte sans y travailler est normal.
+    if (clean.length === 0 && !dates.every((d) => isOnCallWeekend(d, state.settings))) {
       warnings.push({ date: d0, message: 'Tous les présents ont ce jour comme non travaillé : attribué quand même.' });
     }
     const priority = idx.some((i) => ev.isHoliday(i)) ? 2 : idx.some((i) => ev.isWeekendIdx(i)) ? 1 : 0;

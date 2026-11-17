@@ -152,3 +152,25 @@ describe('partage', () => {
     expect(ics).toContain('DTEND;VALUE=DATE:20270104');
   });
 });
+
+describe('week-ends non travaillés', () => {
+  it('garde le week-end groupé et sans alerte quand personne ne travaille le samedi-dimanche', () => {
+    const s = team();
+    s.doctors.forEach((d) => (d.offWeekdays = [5, 6]));
+    const r = generate(s, { from: '2027-03-01', to: '2027-03-31', seed: 1 });
+    expect(r.warnings).toEqual([]);
+    for (const d of eachDay('2027-03-01', '2027-03-28')) {
+      if (weekday(d) === 4) expect(r.assignments[addDays(d, 2)]!.doctorId).toBe(r.assignments[d]!.doctorId);
+    }
+  });
+
+  it('pas d’alerte un week-end où seuls des non-travaillants sont présents', () => {
+    const s = team();
+    s.doctors[0]!.offWeekdays = [5, 6];
+    s.doctors[1]!.offWeekdays = [5, 6];
+    s.absences = [{ id: 'a', doctorId: 'd2', start: '2027-03-01', end: '2027-03-31', label: '' }];
+    const r = generate(s, { from: '2027-03-01', to: '2027-03-31', seed: 1 });
+    expect(r.warnings.filter((w) => weekday(w.date) >= 5)).toEqual([]);
+    expect(r.assignments['2027-03-06']).toBeDefined();
+  });
+});

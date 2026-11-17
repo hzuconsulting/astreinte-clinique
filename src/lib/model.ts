@@ -77,6 +77,15 @@ export function holidayIndex(settings: Settings, fromYear: number, toYear: numbe
   return map;
 }
 
+/**
+ * Jour non travaillé « qui compte ». Si personne dans l'équipe ne travaille ce
+ * jour de la semaine (typiquement samedi et dimanche), il n'écarte personne :
+ * l'astreinte doit bien être tenue par quelqu'un.
+ */
+export function isOffDay(state: Pick<PlanState, 'doctors'>, doc: Doctor, wd: Weekday): boolean {
+  return doc.offWeekdays.includes(wd) && state.doctors.some((d) => !d.offWeekdays.includes(wd));
+}
+
 export type Unavailability = { kind: 'absence'; label: string } | { kind: 'off'; weekday: Weekday };
 
 /** Pourquoi un médecin ne peut pas être d'astreinte ce jour-là (null = disponible). */
@@ -88,7 +97,7 @@ export function unavailability(state: PlanState, doctorId: string, date: ISODate
   }
   const doc = state.doctors.find((d) => d.id === doctorId);
   const wd = weekday(date);
-  if (doc?.offWeekdays.includes(wd)) return { kind: 'off', weekday: wd };
+  if (doc && isOffDay(state, doc, wd)) return { kind: 'off', weekday: wd };
   return null;
 }
 
