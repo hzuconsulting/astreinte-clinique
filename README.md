@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" width="96" alt="">
+
 # Astreintes — Clinique
 
 Planning d'astreinte assisté pour une équipe de chirurgiens, mobile-first.

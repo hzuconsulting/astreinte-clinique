@@ -1,0 +1,26 @@
+/** Le logo : une page de calendrier, la lune des nuits d'astreinte et une croix médicale. */
+export function Logo({ size = 32, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="logo-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#14B8A6" />
+          <stop offset="1" stopColor="#0F5F59" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="15" fill="url(#logo-bg)" />
+      <rect x="13" y="16" width="38" height="35" rx="7" fill="#FFFFFF" />
+      <path d="M13 23a7 7 0 0 1 7-7h24a7 7 0 0 1 7 7v3H13z" fill="#CCFBF1" />
+      <rect x="21" y="11" width="4" height="10" rx="2" fill="#FFFFFF" />
+      <rect x="39" y="11" width="4" height="10" rx="2" fill="#FFFFFF" />
+      <path d="M30.5 30.5a9 9 0 1 0 8.6 11.6 7.2 7.2 0 0 1-8.6-11.6z" fill="#0F766E" />
+      <path
+        d="M39.6 29.4h2.8v2.9h2.9v2.8h-2.9v2.9h-2.8v-2.9h-2.9v-2.8h2.9z"
+        fill="#F43F5E"
+        stroke="#F43F5E"
+        strokeWidth="0.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

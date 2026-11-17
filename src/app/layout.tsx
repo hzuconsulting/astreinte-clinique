@@ -4,6 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Astreintes — Clinique',
   description: 'Planning d’astreinte équitable pour l’équipe de chirurgie',
+  appleWebApp: { capable: true, title: 'Astreintes', statusBarStyle: 'default' },
 };
 
 export const viewport: Viewport = {

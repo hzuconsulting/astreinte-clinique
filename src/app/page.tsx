@@ -6,6 +6,7 @@ import { PlanningView } from '@/components/PlanningView';
 import { ShareView } from '@/components/ShareView';
 import { StatsView } from '@/components/StatsView';
 import { TeamView } from '@/components/TeamView';
+import { Logo } from '@/components/Logo';
 import { usePlan, type SyncStatus } from '@/components/usePlan';
 
 const TABS = [
@@ -31,7 +32,7 @@ export default function Home() {
       <header className="no-print sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center px-4 py-3">
           <span className="flex items-center gap-2 font-bold text-ink">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal text-sm text-white">A</span>
+            <Logo size={32} />
             Astreintes
           </span>
           <SyncPill sync={sync} onClick={() => setTab('partage')} />
