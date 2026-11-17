@@ -53,11 +53,32 @@ Le code est dans `src/lib/scheduler.ts`, les tests dans `src/lib/scheduler.test.
 
 ## Où sont les données ?
 
-Dans le navigateur de chaque appareil (localStorage). Il n'y a pas de serveur : le
-site est 100 % statique, publié sur GitHub Pages. Pour travailler à trois, une
-personne tient le planning et envoie le lien de partage après chaque modification
-(ou chacun réimporte la dernière version). Penser à exporter une sauvegarde de temps
-en temps.
+**Par défaut, sur l'appareil seulement** (pastille « Cet appareil seul » en haut).
+
+**À plusieurs : un espace d'équipe en ligne**, sur Supabase (gratuit). Le planning
+entier est un document rangé sous un code d'équipe secret ; la table n'est jamais
+lisible directement, seulement via deux fonctions qui exigent ce code. Chaque
+modification est envoyée en ligne après une seconde, et celles des collègues
+arrivent toutes les 15 s et au retour sur l'appli. Si deux personnes modifient en
+même temps, les deux modifications sont fusionnées (sur un même jour, la dernière
+enregistrée l'emporte). Les modifications faites hors connexion partent au retour du
+réseau.
+
+Mise en place, une fois :
+
+1. Créer un projet sur [supabase.com](https://supabase.com) (région Europe).
+2. **SQL Editor → New query** : coller `supabase/schema.sql`, puis **Run**.
+3. **Project Settings → API** : copier l'URL du projet et la clé publique
+   (*anon* ou *publishable* — jamais *service_role* ni *secret*).
+4. Dans l'appli, onglet **Partager → Travailler à plusieurs** : coller les deux
+   valeurs, puis **Créer l'espace d'équipe**. Le planning de l'appareil devient celui
+   de l'équipe.
+5. **Inviter un collègue** : le lien contient tout ce qu'il faut, il suffit de
+   l'ouvrir. Ce lien donne accès au planning : ne le diffuser qu'à l'équipe.
+
+Remarque : un projet Supabase gratuit est mis en pause après une semaine sans aucune
+visite ; l'usage quotidien de l'appli suffit à l'éviter, sinon on le relance d'un clic
+depuis le tableau de bord Supabase.
 
 ## Développer
 

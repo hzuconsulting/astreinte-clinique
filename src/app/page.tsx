@@ -7,7 +7,7 @@ import { ShareView } from '@/components/ShareView';
 import { StatsView } from '@/components/StatsView';
 import { TeamView } from '@/components/TeamView';
 import { Button } from '@/components/ui';
-import { usePlan } from '@/components/usePlan';
+import { usePlan, type SyncStatus } from '@/components/usePlan';
 
 const TABS = [
   { id: 'planning', label: 'Planning', icon: '📅' },
@@ -19,7 +19,7 @@ const TABS = [
 type Tab = (typeof TABS)[number]['id'];
 
 export default function Home() {
-  const { state, update, replace, incoming, acceptIncoming, dismissIncoming } = usePlan();
+  const { state, update, replace, incoming, acceptIncoming, dismissIncoming, sync, config, connect, disconnect, syncNow } = usePlan();
   const [tab, setTab] = useState<Tab>('planning');
   const t = todayISO();
   const [cursor, setCursor] = useState({ year: Number(t.slice(0, 4)), month: Number(t.slice(5, 7)) });
@@ -30,12 +30,13 @@ export default function Home() {
   return (
     <div className="min-h-screen pb-24 sm:pb-8">
       <header className="no-print sticky top-0 z-40 border-b border-line bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-3xl items-center px-4 py-3">
           <span className="flex items-center gap-2 font-bold text-ink">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-teal text-sm text-white">A</span>
             Astreintes
           </span>
-          <nav className="hidden gap-1 sm:flex">
+          <SyncPill sync={sync} onClick={() => setTab('partage')} />
+          <nav className="hidden gap-1 sm:flex sm:flex-1 sm:justify-end">
             {TABS.map((x) => (
               <button
                 key={x.id}
@@ -64,7 +65,9 @@ export default function Home() {
         {tab === 'absences' && <AbsencesView state={state} update={update} />}
         {tab === 'equipe' && <TeamView state={state} update={update} year={cursor.year} />}
         {tab === 'bilan' && <StatsView state={state} year={cursor.year} setYear={setYear} />}
-        {tab === 'partage' && <ShareView state={state} replace={replace} year={cursor.year} />}
+        {tab === 'partage' && (
+          <ShareView state={state} replace={replace} year={cursor.year} sync={sync} config={config} connect={connect} disconnect={disconnect} syncNow={syncNow} />
+        )}
       </main>
 
       <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white pb-[env(safe-area-inset-bottom)] sm:hidden">
@@ -82,5 +85,21 @@ export default function Home() {
         </div>
       </nav>
     </div>
+  );
+}
+
+function SyncPill({ sync, onClick }: { sync: SyncStatus; onClick: () => void }) {
+  const [label, cls] =
+    sync.mode === 'local'
+      ? ['Cet appareil seul', 'bg-amber-light text-amber']
+      : sync.phase === 'error'
+        ? ['Non synchronisé', 'bg-rose-light text-rose']
+        : sync.phase === 'syncing'
+          ? ['Synchronisation…', 'bg-paper text-muted']
+          : ['● Équipe à jour', 'bg-teal-light text-teal-dark'];
+  return (
+    <button onClick={onClick} className={`ml-auto mr-2 rounded-full px-3 py-1 text-xs font-semibold sm:ml-4 ${cls}`}>
+      {label}
+    </button>
   );
 }
