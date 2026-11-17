@@ -263,3 +263,59 @@ describe('solde', () => {
     expect(b.from).toBe('2027-01-04');
   });
 });
+
+describe('week-ends à cheval sur deux mois', () => {
+  // Ven. 30 oct. → dim. 1er nov. 2026 ; ven. 31 déc. 2027 → dim. 2 janv. 2028.
+  it('mois par mois : le dimanche de novembre suit le week-end commencé en octobre', () => {
+    const s = team();
+    s.assignments = generate(s, { from: '2026-10-01', to: '2026-10-31', seed: 1 }).assignments;
+    const r = generate(s, { from: '2026-11-01', to: '2026-11-30', seed: 2 });
+    expect(r.assignments['2026-11-01']!.doctorId).toBe(r.assignments['2026-10-30']!.doctorId);
+    expect(r.assignments['2026-10-31']).toEqual(s.assignments['2026-10-31']); // octobre inchangé
+  });
+
+  it('octobre pas encore planifié : le week-end entier est attribué à une seule personne', () => {
+    const s = team();
+    const r = generate(s, { from: '2026-11-01', to: '2026-11-30', seed: 3 });
+    const who = r.assignments['2026-11-01']!.doctorId;
+    expect(r.assignments['2026-10-30']!.doctorId).toBe(who);
+    expect(r.assignments['2026-10-31']!.doctorId).toBe(who);
+    expect(r.assignments['2026-10-29']).toBeUndefined();
+  });
+
+  it('fonctionne aussi au changement d’année', () => {
+    const s = team();
+    s.assignments = generate(s, { from: '2027-12-01', to: '2027-12-31', seed: 1 }).assignments;
+    const r = generate(s, { from: '2028-01-01', to: '2028-01-31', seed: 1 });
+    const who = r.assignments['2027-12-31']!.doctorId;
+    expect(r.assignments['2028-01-01']!.doctorId).toBe(who);
+    expect(r.assignments['2028-01-02']!.doctorId).toBe(who);
+  });
+
+  it('suit un jour verrouillé du week-end', () => {
+    const s = team();
+    s.assignments['2026-10-31'] = { doctorId: 'd2', locked: true };
+    const r = generate(s, { from: '2026-10-01', to: '2026-11-30', seed: 5 });
+    expect(r.assignments['2026-10-30']!.doctorId).toBe('d2');
+    expect(r.assignments['2026-11-01']!.doctorId).toBe('d2');
+  });
+
+  it('respecte des médecins différents verrouillés sur un même week-end', () => {
+    const s = team();
+    s.assignments['2026-10-30'] = { doctorId: 'd0', locked: true };
+    s.assignments['2026-10-31'] = { doctorId: 'd1', locked: true };
+    const r = generate(s, { from: '2026-11-01', to: '2026-11-30', seed: 5 });
+    expect(r.assignments['2026-10-30']).toEqual({ doctorId: 'd0', locked: true });
+    expect(r.assignments['2026-10-31']).toEqual({ doctorId: 'd1', locked: true });
+    expect(r.assignments['2026-11-01']).toBeDefined();
+  });
+
+  it('ne suit pas un médecin absent : le reste du week-end va à quelqu’un d’autre', () => {
+    const s = team();
+    s.assignments = generate(s, { from: '2026-10-01', to: '2026-10-31', seed: 1 }).assignments;
+    const who = s.assignments['2026-10-30']!.doctorId;
+    s.absences = [{ id: 'a', doctorId: who, start: '2026-11-01', end: '2026-11-01', label: '' }];
+    const r = generate(s, { from: '2026-11-01', to: '2026-11-30', seed: 2 });
+    expect(r.assignments['2026-11-01']!.doctorId).not.toBe(who);
+  });
+});

@@ -299,8 +299,21 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
     free.add(d);
   }
 
-  const ev = new Evaluator(base, win.from, win.to);
+  // Une semaine de marge de part et d'autre : un week-end peut déborder sur l'année voisine.
+  const ev = new Evaluator(base, addDays(win.from, -7), addDays(win.to, 7));
   ev.checkpointUntil = Math.max(ev.checkpointUntil, ev.index.get(to)!);
+
+  // Week-end à cheval sur la limite de la période (ex. ven. 30 oct. → dim. 1er nov.) :
+  // ses jours encore vides de l'autre côté sont inclus, pour qu'il revienne à une seule personne.
+  const stretch = (edge: ISODate, step: 1 | -1) => {
+    const b = ev.block(ev.index.get(edge)!);
+    for (let x = addDays(edge, step); ev.index.has(x) && ev.block(ev.index.get(x)!) === b; x = addDays(x, step)) {
+      if (base.assignments[x]) continue; // déjà attribué : il servira de référence, voir plus bas
+      free.add(x);
+    }
+  };
+  stretch(from, -1);
+  stretch(to, 1);
   const nd = ev.nd;
   const warnings: Warning[] = [];
   if (nd === 0) return { assignments: {}, warnings: [{ date: from, message: 'Aucun médecin dans l’équipe.' }], cost: 0 };
@@ -311,11 +324,30 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
 
   // Découpage en blocs.
   const units: Unit[] = [];
+  /**
+   * Médecin déjà en place sur le reste du même week-end (jours verrouillés, ou
+   * hors de la période). Un seul médecin → on le suit ; plusieurs médecins
+   * (choix manuels différents) → aucune contrainte.
+   */
+  const blockOwner = (idx: number[]): number | null => {
+    const b = ev.block(idx[0]!);
+    const owners = new Set<number>();
+    for (let j = idx[0]! - 1; j >= 0 && ev.block(j) === b; j--) if (ev.timeline[j]! >= 0) owners.add(ev.timeline[j]!);
+    for (let j = idx[idx.length - 1]! + 1; j < ev.timeline.length && ev.block(j) === b; j++) if (ev.timeline[j]! >= 0) owners.add(ev.timeline[j]!);
+    return owners.size === 1 ? [...owners][0]! : null;
+  };
+
   const pushUnit = (dates: ISODate[]) => {
     const idx = dates.map((d) => ev.index.get(d)!);
     const all = [...Array(nd).keys()];
-    const allowed = all.filter((k) => dates.every((d) => !absent(k, d)));
-    const clean = allowed.filter((k) => dates.every((d) => !offDay(k, d)));
+    let allowed = all.filter((k) => dates.every((d) => !absent(k, d)));
+    let clean = allowed.filter((k) => dates.every((d) => !offDay(k, d)));
+    const owner = blockOwner(idx);
+    if (owner !== null && allowed.includes(owner)) {
+      allowed = [owner];
+      clean = clean.includes(owner) ? [owner] : [];
+      if (clean.length === 0 && dates.length > 1) clean = [owner]; // on suit le week-end plutôt que de le couper
+    }
     if (dates.length > 1 && clean.length === 0) {
       // Personne ne peut tenir tout le bloc proprement : on le découpe jour par jour.
       dates.forEach((d) => pushUnit([d]));
