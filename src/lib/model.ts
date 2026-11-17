@@ -1,4 +1,4 @@
-import { toDate, weekday, type ISODate, type Weekday } from './dates';
+import { addDays, toDate, weekday, type ISODate, type Weekday } from './dates';
 import { frenchHolidays } from './holidays';
 
 export interface Doctor {
@@ -112,4 +112,25 @@ export function isOnCallWeekend(date: ISODate, settings: Pick<Settings, 'weekend
 
 export function yearOf(date: ISODate): number {
   return toDate(date).getUTCFullYear();
+}
+
+/**
+ * Les jours du week-end d'astreinte qui contient `date` (vendredi → dimanche
+ * par défaut, plus le férié accolé), même à cheval sur deux mois ou deux
+ * années. Un seul jour si la date n'est pas dans un week-end ou si les
+ * week-ends ne sont pas groupés.
+ */
+export function weekendBlockOf(state: Pick<PlanState, 'settings'>, date: ISODate): ISODate[] {
+  const y = yearOf(date);
+  const holidays = holidayIndex(state.settings, y - 1, y + 1);
+  const special = (d: ISODate) => isOnCallWeekend(d, state.settings) || holidays.has(d);
+  if (!state.settings.groupWeekends || !special(date)) return [date];
+  let start = date;
+  while (special(addDays(start, -1))) start = addDays(start, -1);
+  let end = date;
+  while (special(addDays(end, 1))) end = addDays(end, 1);
+  const days: ISODate[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
+  // Un férié isolé en semaine n'est pas un week-end.
+  return days.some((d) => isOnCallWeekend(d, state.settings)) ? days : [date];
 }

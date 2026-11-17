@@ -319,3 +319,16 @@ describe('week-ends à cheval sur deux mois', () => {
     expect(r.assignments['2026-11-01']!.doctorId).not.toBe(who);
   });
 });
+
+describe('week-end d’un jour donné', () => {
+  it('trouve le week-end entier, même à cheval sur deux mois, avec le férié accolé', async () => {
+    const { weekendBlockOf } = await import('./model');
+    const s = team();
+    expect(weekendBlockOf(s, '2026-11-01')).toEqual(['2026-10-30', '2026-10-31', '2026-11-01']);
+    expect(weekendBlockOf(s, '2027-03-27')).toEqual(['2027-03-26', '2027-03-27', '2027-03-28', '2027-03-29']); // Pâques
+    expect(weekendBlockOf(s, '2027-05-12')).toEqual(['2027-05-12']); // mercredi ordinaire
+    expect(weekendBlockOf(s, '2026-05-01')).toEqual(['2026-05-01', '2026-05-02', '2026-05-03']); // 1er mai = vendredi
+    s.settings.groupWeekends = false;
+    expect(weekendBlockOf(s, '2026-11-01')).toEqual(['2026-11-01']);
+  });
+});

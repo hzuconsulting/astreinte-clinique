@@ -4,7 +4,7 @@ import {
   eachDay, formatLong, formatShort, monthBounds, MONTH_LABEL, todayISO, weekday, WEEKDAY_SHORT,
   type ISODate,
 } from '@/lib/dates';
-import { holidayIndex, isOnCallWeekend, unavailability, type PlanState } from '@/lib/model';
+import { holidayIndex, isOnCallWeekend, unavailability, weekendBlockOf, type PlanState } from '@/lib/model';
 import { generate, suggest, type Warning } from '@/lib/scheduler';
 import { Button, Card, DoctorChip, Sheet, Toggle, inputCls } from './ui';
 
@@ -151,7 +151,7 @@ export function PlanningView({ state, update, cursor, setCursor }: Props) {
         )}
       </Sheet>
 
-      <DaySheet date={day} onClose={() => setDay(null)} state={state} update={update} holidays={holidays} />
+      <DaySheet key={day ?? ''} date={day} onClose={() => setDay(null)} state={state} update={update} holidays={holidays} />
     </div>
   );
 }
@@ -268,10 +268,13 @@ function DaySheet({
   holidays: Map<ISODate, string>;
 }) {
   const suggestions = useMemo(() => (date ? suggest(state, date) : []), [state, date]);
+  const [wholeWeekend, setWholeWeekend] = useState(true);
   if (!date) return null;
   const a = state.assignments[date];
   const docs = new Map(state.doctors.map((d) => [d.id, d]));
   const bestOk = suggestions.find((s) => !s.blocked && !s.notes.includes('Jour non travaillé'));
+  const block = weekendBlockOf(state, date);
+  const isBlock = block.length > 1;
   const set = (doctorId: string | null, locked = true) =>
     update((s) => {
       const assignments = { ...s.assignments };
@@ -279,6 +282,28 @@ function DaySheet({
       else delete assignments[date];
       return { ...s, assignments };
     });
+  const multi = isBlock && wholeWeekend;
+  const scope = multi ? block : [date];
+  const applyToScope = (fn: (x: PlanState['assignments'][string] | undefined) => PlanState['assignments'][string] | undefined) =>
+    update((s) => {
+      const assignments = { ...s.assignments };
+      for (const d of scope) {
+        const v = fn(assignments[d]);
+        if (v) assignments[d] = v;
+        else delete assignments[d];
+      }
+      return { ...s, assignments };
+    });
+  /** Confie tout le week-end au médecin, sauf les jours où il est absent. */
+  const setWeekend = (doctorId: string): ISODate[] => {
+    const skipped = block.filter((d) => unavailability(state, doctorId, d)?.kind === 'absence');
+    update((s) => {
+      const assignments = { ...s.assignments };
+      for (const d of block) if (!skipped.includes(d)) assignments[d] = { doctorId, locked: true };
+      return { ...s, assignments };
+    });
+    return skipped;
+  };
 
   return (
     <Sheet open onClose={onClose} title={<span className="capitalize">{formatLong(date)}</span>}>
@@ -291,6 +316,20 @@ function DaySheet({
             'Personne n’est d’astreinte ce jour.'
           )}
         </p>
+        {isBlock && (
+          <div className="rounded-xl border border-line px-3">
+            <Toggle
+              checked={wholeWeekend}
+              onChange={setWholeWeekend}
+              label="Appliquer à tout le week-end"
+              hint={`Du ${formatShort(block[0]!)} au ${formatShort(block[block.length - 1]!)} (${block.length} jours)${
+                block.some((d) => state.assignments[d])
+                  ? ` — actuellement : ${block.map((d) => `${formatShort(d).split(' ').slice(0, 2).join(' ')} ${docs.get(state.assignments[d]?.doctorId ?? '')?.name ?? '—'}`).join(', ')}`
+                  : ''
+              }`}
+            />
+          </div>
+        )}
         <div>
           <p className="mb-2 font-semibold text-ink">Choisir — classés par l’assistant</p>
           <ul className="space-y-2">
@@ -302,7 +341,14 @@ function DaySheet({
                   <button
                     disabled={!!s.blocked}
                     onClick={() => {
-                      set(s.doctorId);
+                      if (isBlock && wholeWeekend) {
+                        const skipped = setWeekend(s.doctorId);
+                        if (skipped.length) {
+                          alert(`${doc.name} est absent le ${skipped.map(formatShort).join(', ')} : ce${skipped.length > 1 ? 's jours n’ont' : ' jour n’a'} pas été modifié${skipped.length > 1 ? 's' : ''}.`);
+                        }
+                      } else {
+                        set(s.doctorId);
+                      }
                       onClose();
                     }}
                     className={`flex min-h-[52px] w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
@@ -316,7 +362,12 @@ function DaySheet({
                         {bestOk?.doctorId === s.doctorId && <span className="ml-2 rounded-full bg-teal px-2 py-0.5 text-[10px] font-bold uppercase text-white">Recommandé</span>}
                       </span>
                       <span className="block text-xs text-muted">
-                        {s.blocked ? `Absent — ${s.blocked}` : s.notes.length ? s.notes.join(' · ') : 'Disponible'}
+                        {(() => {
+                          if (s.blocked) return `Absent — ${s.blocked}`;
+                          const away = multi ? block.filter((d) => d !== date && unavailability(state, s.doctorId, d)?.kind === 'absence') : [];
+                          const notes = [...(away.length ? [`Absent le ${away.map(formatShort).join(', ')}`] : []), ...s.notes];
+                          return notes.length ? notes.join(' · ') : 'Disponible';
+                        })()}
                       </span>
                     </span>
                     {current && <span className="text-teal">✓</span>}
@@ -327,11 +378,15 @@ function DaySheet({
           </ul>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {a?.locked && (
-            <Button variant="soft" onClick={() => set(a.doctorId, false)}>Déverrouiller</Button>
+          {(scope.some((d) => state.assignments[d]?.locked)) && (
+            <Button variant="soft" onClick={() => applyToScope((x) => (x ? { ...x, locked: false } : x))}>
+              {multi ? 'Déverrouiller le week-end' : 'Déverrouiller'}
+            </Button>
           )}
-          {a && (
-            <Button variant="danger" onClick={() => { set(null); onClose(); }}>Vider ce jour</Button>
+          {scope.some((d) => state.assignments[d]) && (
+            <Button variant="danger" onClick={() => { applyToScope(() => undefined); onClose(); }}>
+              {multi ? 'Vider le week-end' : 'Vider ce jour'}
+            </Button>
           )}
         </div>
         <p className="text-xs text-muted">
