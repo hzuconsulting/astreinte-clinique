@@ -1,0 +1,14 @@
+node_modules/
+.next/
+dist/
+out/
+coverage/
+.env
+.env.local
+*.log
+.DS_Store
+.turbo/
+*.tsbuildinfo
+
+# Rapport du générateur de portraits : recalculé à chaque passage
+scripts/portraits/report.md
