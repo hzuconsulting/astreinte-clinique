@@ -26,16 +26,16 @@ returns table (plan jsonb, plan_version integer, plan_updated_at timestamptz)
 language sql
 security definer
 set search_path = public
-as $$
+as $body$
   select p.data, p.version, p.updated_at from public.plans p where p.team_code = p_code;
-$$;
+$body$;
 
 create or replace function public.save_plan(p_code text, p_data jsonb, p_version integer)
 returns table (ok boolean, plan_version integer, plan jsonb)
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $body$
 declare
   cur public.plans%rowtype;
 begin
@@ -61,7 +61,7 @@ begin
     return query select true, cur.version + 1, p_data;
   end if;
 end;
-$$;
+$body$;
 
 revoke all on function public.get_plan(text) from public;
 revoke all on function public.save_plan(text, jsonb, integer) from public;
