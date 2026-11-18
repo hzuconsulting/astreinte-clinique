@@ -332,3 +332,40 @@ describe('week-end d’un jour donné', () => {
     expect(weekendBlockOf(s, '2026-11-01')).toEqual(['2026-11-01']);
   });
 });
+
+describe('jour d’astreinte par défaut', () => {
+  it('donne tous les mercredis à Dr B, sauf absence et jours fériés', async () => {
+    const { holidayIndex } = await import('./model');
+    const s = team();
+    s.doctors[1]!.defaultWeekdays = [2]; // mercredi
+    s.absences = [{ id: 'a', doctorId: 'd1', start: '2027-08-02', end: '2027-08-15', label: 'Vacances' }];
+    const r = generate(s, { from: '2027-01-01', to: '2027-12-31', seed: 3 });
+    const hol = holidayIndex(s.settings, 2027, 2027);
+    for (const d of eachDay('2027-01-01', '2027-12-31')) {
+      if (weekday(d) !== 2 || hol.has(d)) continue;
+      if (d >= '2027-08-02' && d <= '2027-08-15') expect(r.assignments[d]!.doctorId).not.toBe('d1');
+      else expect(r.assignments[d]!.doctorId).toBe('d1');
+    }
+    // Le total reste équitable (à quelques jours près) : les autres jours compensent.
+    const st = yearStats({ ...s, assignments: r.assignments }, 2027);
+    const totals = st.rows.map((x) => x.total);
+    expect(Math.max(...totals) - Math.min(...totals)).toBeLessThanOrEqual(4);
+  });
+
+  it('partage un même jour par défaut entre deux médecins', () => {
+    const s = team();
+    s.doctors[0]!.defaultWeekdays = [0];
+    s.doctors[1]!.defaultWeekdays = [0];
+    const r = generate(s, { from: '2027-01-01', to: '2027-06-30', seed: 1 });
+    const mondays = eachDay('2027-01-01', '2027-06-30').filter((d) => weekday(d) === 0 && !['2027-03-29', '2027-05-17'].includes(d));
+    expect(mondays.every((d) => ['d0', 'd1'].includes(r.assignments[d]!.doctorId))).toBe(true);
+  });
+
+  it('ne s’applique pas au week-end d’astreinte et passe en tête des suggestions', () => {
+    const s = team();
+    s.doctors[2]!.defaultWeekdays = [2];
+    const sug = suggest(s, '2027-03-03'); // un mercredi
+    expect(sug[0]!.doctorId).toBe('d2');
+    expect(sug[0]!.notes).toContain('Son jour d’astreinte par défaut');
+  });
+});

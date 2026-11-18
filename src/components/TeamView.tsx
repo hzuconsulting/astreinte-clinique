@@ -27,7 +27,7 @@ export function TeamView({ state, update, year }: Props) {
       ...s,
       doctors: [
         ...s.doctors,
-        { id: uid(), name: `Dr ${String.fromCharCode(65 + s.doctors.length)}`, color: DOCTOR_COLORS[s.doctors.length % DOCTOR_COLORS.length]!, offWeekdays: [], share: 100 },
+        { id: uid(), name: `Dr ${String.fromCharCode(65 + s.doctors.length)}`, color: DOCTOR_COLORS[s.doctors.length % DOCTOR_COLORS.length]!, offWeekdays: [], defaultWeekdays: [], share: 100 },
       ],
     }));
 
@@ -63,6 +63,8 @@ export function TeamView({ state, update, year }: Props) {
                   onClick={() =>
                     setDoc(d.id, {
                       offWeekdays: works ? [...d.offWeekdays, wd].sort() : d.offWeekdays.filter((x) => x !== wd),
+                      // Un jour non travaillé ne peut pas être un jour d'astreinte par défaut.
+                      defaultWeekdays: works ? (d.defaultWeekdays ?? []).filter((x) => x !== wd) : d.defaultWeekdays ?? [],
                     })
                   }
                   aria-pressed={works}
@@ -79,6 +81,8 @@ export function TeamView({ state, update, year }: Props) {
               ? 'Disponible tous les jours.'
               : `Jamais d’astreinte le ${d.offWeekdays.map((x) => WEEKDAY_LABEL[x]!.toLowerCase()).join(', le ')}.`}
           </p>
+
+          <DefaultDays doctor={d} state={state} onChange={(defaultWeekdays, offWeekdays) => setDoc(d.id, { defaultWeekdays, offWeekdays })} />
 
           <label className="mt-4 flex items-center justify-between gap-3 text-sm">
             <span>
@@ -190,5 +194,51 @@ function SettingsCard({ state, update, year }: Props) {
       </form>
       <p className="mt-1 text-xs text-muted">Un jour ajouté ici compte comme un férié dans la répartition.</p>
     </Card>
+  );
+}
+
+/** Jour(s) d'astreinte par défaut : hors week-end d'astreinte. */
+function DefaultDays({
+  doctor: d, state, onChange,
+}: {
+  doctor: Doctor;
+  state: PlanState;
+  onChange: (defaults: Weekday[], off: Weekday[]) => void;
+}) {
+  const defaults = d.defaultWeekdays ?? [];
+  const weekdays = ([0, 1, 2, 3, 4, 5, 6] as Weekday[]).filter((x) => x < state.settings.weekendStart);
+  const others = (wd: Weekday) => state.doctors.filter((o) => o.id !== d.id && (o.defaultWeekdays ?? []).includes(wd)).map((o) => o.name);
+  return (
+    <div className="mt-4">
+      <p className="text-sm font-semibold text-ink">Jour d’astreinte fixe</p>
+      <p className="mb-2 text-xs text-muted">Il est d’astreinte ce jour-là chaque semaine, sauf absence ou jour férié.</p>
+      <div className="flex flex-wrap gap-1.5">
+        {weekdays.map((wd) => {
+          const on = defaults.includes(wd);
+          return (
+            <button
+              key={wd}
+              onClick={() =>
+                onChange(
+                  on ? defaults.filter((x) => x !== wd) : [...defaults, wd].sort(),
+                  on ? d.offWeekdays : d.offWeekdays.filter((x) => x !== wd), // jour fixe ⇒ jour travaillé
+                )
+              }
+              aria-pressed={on}
+              className={`min-h-[40px] rounded-xl px-3 text-sm font-semibold transition ${on ? 'bg-ink text-white' : 'border border-line bg-white text-muted'}`}
+            >
+              {WEEKDAY_LABEL[wd]}
+            </button>
+          );
+        })}
+      </div>
+      {defaults.length > 0 && (
+        <p className="mt-2 text-xs text-muted">
+          D’astreinte tous les {defaults.map((x) => `${WEEKDAY_LABEL[x]!.toLowerCase()}s`).join(' et ')}.
+          {defaults.some((x) => others(x).length) &&
+            ` Partagé avec ${[...new Set(defaults.flatMap(others))].join(', ')} : l’assistant répartit ce jour entre vous.`}
+        </p>
+      )}
+    </div>
   );
 }

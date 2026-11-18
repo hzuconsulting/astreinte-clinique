@@ -10,6 +10,12 @@ export interface Doctor {
    * Le médecin n'est jamais mis d'astreinte ces jours-là.
    */
   offWeekdays: Weekday[];
+  /**
+   * Jours de semaine où il est d'astreinte par défaut (ex. tous les mercredis).
+   * Hors week-end et jours fériés, et sauf absence : le jour revient alors à
+   * quelqu'un d'autre.
+   */
+  defaultWeekdays: Weekday[];
   /** Part de la charge, en % (100 = temps plein). Les cibles d'équité en tiennent compte. */
   share: number;
 }
@@ -61,9 +67,9 @@ export function defaultState(): PlanState {
   return {
     version: 1,
     doctors: [
-      { id: uid(), name: 'Dr A', color: DOCTOR_COLORS[0]!, offWeekdays: [], share: 100 },
-      { id: uid(), name: 'Dr B', color: DOCTOR_COLORS[1]!, offWeekdays: [], share: 100 },
-      { id: uid(), name: 'Dr C', color: DOCTOR_COLORS[2]!, offWeekdays: [], share: 100 },
+      { id: uid(), name: 'Dr A', color: DOCTOR_COLORS[0]!, offWeekdays: [], defaultWeekdays: [], share: 100 },
+      { id: uid(), name: 'Dr B', color: DOCTOR_COLORS[1]!, offWeekdays: [], defaultWeekdays: [], share: 100 },
+      { id: uid(), name: 'Dr C', color: DOCTOR_COLORS[2]!, offWeekdays: [], defaultWeekdays: [], share: 100 },
     ],
     absences: [],
     assignments: {},
@@ -133,4 +139,16 @@ export function weekendBlockOf(state: Pick<PlanState, 'settings'>, date: ISODate
   for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
   // Un férié isolé en semaine n'est pas un week-end.
   return days.some((d) => isOnCallWeekend(d, state.settings)) ? days : [date];
+}
+
+/**
+ * Médecins d'astreinte par défaut ce jour-là (et présents). Ne s'applique ni
+ * aux week-ends d'astreinte ni aux jours fériés, qui sont répartis équitablement.
+ */
+export function defaultDoctorsFor(state: PlanState, date: ISODate, holidays: Map<ISODate, string>): string[] {
+  if (isOnCallWeekend(date, state.settings) || holidays.has(date)) return [];
+  const wd = weekday(date);
+  return state.doctors
+    .filter((d) => (d.defaultWeekdays ?? []).includes(wd) && unavailability(state, d.id, date)?.kind !== 'absence')
+    .map((d) => d.id);
 }

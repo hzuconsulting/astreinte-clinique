@@ -20,6 +20,10 @@ d'abord les **jours fériés**, ensuite les **week-ends**, enfin le **total**.
 - **Jours travaillés récurrents.** Pour chaque médecin, on coche les jours de la
   semaine où il travaille (ex. pas le lundi). Il n'est jamais mis d'astreinte un jour
   non travaillé — sauf si personne d'autre n'est présent, et c'est alors signalé.
+- **Jour d'astreinte fixe.** Un médecin peut être d'astreinte par défaut un jour de
+  semaine (ex. tous les mercredis). Sauf absence — le jour revient alors au meilleur
+  remplaçant — et sauf jour férié, réparti équitablement. Les autres jours compensent
+  pour que le total reste juste.
 - **Absences.** Vacances, congrès, formation… sur une plage de dates. Un absent n'est
   jamais d'astreinte. Si une absence est saisie après coup sur des jours déjà attribués,
   l'application le signale et propose de réattribuer en un geste.

@@ -18,7 +18,7 @@
  *     meilleur. Tout est déterministe pour une graine donnée.
  */
 import { addDays, eachDay, weekday, type ISODate } from './dates';
-import { holidayIndex, isOffDay, isOnCallWeekend, unavailability, yearOf, type Assignment, type PlanState } from './model';
+import { defaultDoctorsFor, holidayIndex, isOffDay, isOnCallWeekend, unavailability, yearOf, type Assignment, type PlanState } from './model';
 
 export const WEIGHTS = {
   holiday: 6,
@@ -320,6 +320,7 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
 
   // Disponibilité (absences = interdit ; jour non travaillé = autorisé mais très pénalisé).
   const absent = (k: number, d: ISODate) => unavailability(state, state.doctors[k]!.id, d)?.kind === 'absence';
+  const holidays = holidayIndex(state.settings, yearOf(from) - 1, yearOf(to) + 1);
   const offDay = (k: number, d: ISODate) => isOffDay(state, state.doctors[k]!, weekday(d));
 
   // Découpage en blocs.
@@ -342,6 +343,17 @@ export function generate(state: PlanState, opts: GenerateOptions): GenerateResul
     const all = [...Array(nd).keys()];
     let allowed = all.filter((k) => dates.every((d) => !absent(k, d)));
     let clean = allowed.filter((k) => dates.every((d) => !offDay(k, d)));
+    // Jour d'astreinte par défaut d'un médecin présent : il lui revient.
+    if (dates.length === 1) {
+      const preferred = defaultDoctorsFor(state, dates[0]!, holidays)
+        .map((id) => state.doctors.findIndex((d) => d.id === id))
+        .filter((k) => allowed.includes(k));
+      if (preferred.length > 0) {
+        allowed = preferred;
+        clean = clean.filter((k) => preferred.includes(k));
+        if (clean.length === 0) clean = preferred;
+      }
+    }
     const owner = blockOwner(idx);
     if (owner !== null && allowed.includes(owner)) {
       allowed = [owner];
@@ -562,12 +574,14 @@ export function suggest(state: PlanState, date: ISODate): Suggestion[] {
   ev.checkpointUntil = Math.max(ev.checkpointUntil, i);
   const base = ev.cost();
   const minRest = state.settings.minRest;
+  const defaults = defaultDoctorsFor(state, date, holidayIndex(state.settings, yearOf(date) - 1, yearOf(date) + 1));
   const res = state.doctors.map((doc, k): Suggestion => {
     const u = unavailability(state, doc.id, date);
     const notes: string[] = [];
     let blocked: string | null = null;
     if (u?.kind === 'absence') blocked = u.label;
     if (u?.kind === 'off') notes.push('Jour non travaillé');
+    if (defaults.includes(doc.id)) notes.push('Son jour d’astreinte par défaut');
     // Série de jours consécutifs si on lui confie ce jour.
     let run = 1;
     for (let j = i - 1; j >= 0 && ev.timeline[j] === k; j--) run++;
@@ -603,5 +617,6 @@ export function suggest(state: PlanState, date: ISODate): Suggestion[] {
     ev.timeline[i] = -1;
     return { doctorId: doc.id, delta, blocked, notes };
   });
-  return res.sort((a, b) => (a.blocked ? 1 : 0) - (b.blocked ? 1 : 0) || a.delta - b.delta);
+  const isDefault = (x: Suggestion) => (defaults.includes(x.doctorId) ? 0 : 1);
+  return res.sort((a, b) => (a.blocked ? 1 : 0) - (b.blocked ? 1 : 0) || isDefault(a) - isDefault(b) || a.delta - b.delta);
 }

@@ -12,7 +12,7 @@ export function parseState(raw: unknown): PlanState | null {
   const def = defaultState();
   return {
     version: 1,
-    doctors: s.doctors.map((d) => ({ ...d, offWeekdays: d.offWeekdays ?? [], share: d.share ?? 100 })),
+    doctors: s.doctors.map((d) => ({ ...d, offWeekdays: d.offWeekdays ?? [], defaultWeekdays: d.defaultWeekdays ?? [], share: d.share ?? 100 })),
     absences: s.absences,
     assignments: s.assignments ?? {},
     settings: { ...def.settings, ...(s.settings ?? {}) },
